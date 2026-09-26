@@ -105,7 +105,7 @@ export function Gallery(props: GalleryProps) {
           {favoritesOnly && !search ? 'В избранном пока пусто — отмечайте понравившиеся звёздочкой.' : 'Ничего не найдено.'}
         </p>
       ) : (
-        <div className="columns-1 gap-4 sm:columns-2 2xl:columns-3">
+        <div className="columns-1 gap-4 sm:columns-2 lg:columns-3 2xl:columns-4">
           {items.map((meta) => (
             <ImageCard key={meta.id} meta={meta} actions={actions} busy={busy} />
           ))}

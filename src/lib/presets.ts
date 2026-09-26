@@ -66,10 +66,3 @@ export const DEFAULT_MODEL = 'gpt-image-2'
 export function formatBySize(size: ImageSize): FormatOption {
   return FORMATS.find((f) => f.size === size) ?? FORMATS[0]
 }
-
-export function buildFullPrompt(prompt: string, styles: StyleId[]): string {
-  const descriptions = STYLES.filter((s) => styles.includes(s.id)).map((s) => s.description)
-  const base = prompt.trim()
-  if (descriptions.length === 0) return base
-  return `${base}\n\nStyle: ${descriptions.join('; ')}.`
-}
