@@ -44,6 +44,7 @@ function isAbort(error: unknown): boolean {
 export default function App() {
   const notify = useToast()
   const [theme, toggleTheme] = useTheme()
+  const [baseUrl, setBaseUrl] = useState(settings.getBaseUrl)
   const [apiKey, setApiKey] = useState(settings.getApiKey)
   const [model, setModel] = useState(() => settings.getModel() ?? DEFAULT_MODEL)
   const [prompt, setPrompt] = useState(settings.getDraft)
@@ -100,6 +101,7 @@ export default function App() {
 
       try {
         const images = await generateImages({
+          baseUrl,
           apiKey,
           model,
           prompt: buildFullPrompt(request.prompt, request.styles),
@@ -138,7 +140,7 @@ export default function App() {
         setJob(null)
       }
     },
-    [apiKey, model, notify],
+    [baseUrl, apiKey, model, notify],
   )
 
   const cancel = useCallback(() => controllerRef.current?.abort(), [])
@@ -253,12 +255,16 @@ export default function App() {
     }
   }
 
-  function saveKey(key: string): void {
-    settings.setApiKey(key)
-    setApiKey(key)
+  function saveConnection(values: { baseUrl: string; apiKey: string }): void {
+    settings.setBaseUrl(values.baseUrl)
+    settings.setApiKey(values.apiKey)
+    setBaseUrl(values.baseUrl)
+    setApiKey(values.apiKey)
   }
 
-  if (!apiKey) return <Onboarding onSave={saveKey} />
+  if (!apiKey || !baseUrl) {
+    return <Onboarding initialBaseUrl={baseUrl} initialApiKey={apiKey} onSave={saveConnection} />
+  }
 
   const generateBar = (
     <GenerateBar
@@ -279,9 +285,7 @@ export default function App() {
             <span className="inline-flex size-9 items-center justify-center rounded-xl bg-violet-600 text-white shadow-md shadow-violet-600/30">
               <Sparkles className="size-5" aria-hidden="true" />
             </span>
-            <h1 className="text-base font-semibold tracking-tight">
-              AITUNNEL <span className="text-zinc-500 dark:text-zinc-400">Images</span>
-            </h1>
+            <h1 className="text-base font-semibold tracking-tight">Lumo</h1>
           </div>
           <div className="flex items-center gap-1">
             <span className="mr-2 hidden max-w-48 truncate rounded-full bg-zinc-100 px-3 py-1 font-mono text-xs text-zinc-600 sm:inline dark:bg-zinc-900 dark:text-zinc-400">
@@ -349,12 +353,15 @@ export default function App() {
 
       {settingsOpen && (
         <SettingsDialog
+          baseUrl={baseUrl}
           apiKey={apiKey}
           model={model}
           onClose={() => setSettingsOpen(false)}
           onSave={(values) => {
+            settings.setBaseUrl(values.baseUrl)
             settings.setApiKey(values.apiKey)
             settings.setModel(values.model === DEFAULT_MODEL ? null : values.model)
+            setBaseUrl(values.baseUrl)
             setApiKey(values.apiKey)
             setModel(values.model)
             setSettingsOpen(false)

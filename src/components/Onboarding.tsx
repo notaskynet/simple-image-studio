@@ -1,19 +1,28 @@
-import { ExternalLink, KeyRound, Sparkles } from 'lucide-react'
+import { KeyRound, Link, Sparkles } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 
+import { normalizeBaseUrl } from '../lib/api'
 import { ApiKeyInput } from './ApiKeyInput'
+import { BaseUrlInput } from './BaseUrlInput'
 import { buttonPrimary } from './ui'
 
 interface OnboardingProps {
-  onSave: (key: string) => void
+  initialBaseUrl: string
+  initialApiKey: string
+  onSave: (values: { baseUrl: string; apiKey: string }) => void
 }
 
-export function Onboarding({ onSave }: OnboardingProps) {
-  const [key, setKey] = useState('')
+export function Onboarding({ initialBaseUrl, initialApiKey, onSave }: OnboardingProps) {
+  const [baseUrl, setBaseUrl] = useState(initialBaseUrl)
+  const [key, setKey] = useState(initialApiKey)
+  const [touched, setTouched] = useState(false)
+  const normalized = normalizeBaseUrl(baseUrl)
+  const urlInvalid = touched && baseUrl.trim() !== '' && normalized === null
 
   function submit(event: FormEvent): void {
     event.preventDefault()
-    if (key.trim()) onSave(key.trim())
+    setTouched(true)
+    if (normalized && key.trim()) onSave({ baseUrl: normalized, apiKey: key.trim() })
   }
 
   return (
@@ -26,38 +35,41 @@ export function Onboarding({ onSave }: OnboardingProps) {
         <div className="mb-6 inline-flex size-12 items-center justify-center rounded-2xl bg-violet-600 text-white shadow-lg shadow-violet-600/30">
           <Sparkles className="size-6" aria-hidden="true" />
         </div>
-        <h1 className="text-2xl font-semibold tracking-tight">Добро пожаловать!</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Добро пожаловать в Lumo</h1>
         <p className="mt-2 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
-          Здесь можно создавать изображения по текстовому описанию с помощью AITUNNEL. Для начала работы нужен
-          API-ключ.
+          Создавайте изображения по текстовому описанию через любой OpenAI-совместимый API. Укажите адрес API и
+          ключ — и можно начинать.
         </p>
 
-        <form onSubmit={submit} className="mt-6 space-y-4">
+        <form onSubmit={submit} className="mt-6 space-y-5" noValidate>
+          <div className="space-y-2">
+            <label htmlFor="onboarding-url" className="flex items-center gap-2 text-sm font-medium">
+              <Link className="size-4 text-violet-500" aria-hidden="true" />
+              URL API
+            </label>
+            <BaseUrlInput
+              id="onboarding-url"
+              value={baseUrl}
+              onChange={setBaseUrl}
+              invalid={urlInvalid}
+              autoFocus={!initialBaseUrl}
+            />
+          </div>
           <div className="space-y-2">
             <label htmlFor="onboarding-key" className="flex items-center gap-2 text-sm font-medium">
               <KeyRound className="size-4 text-violet-500" aria-hidden="true" />
-              API-ключ AITUNNEL
+              API-ключ
             </label>
-            <ApiKeyInput id="onboarding-key" value={key} onChange={setKey} autoFocus />
+            <ApiKeyInput id="onboarding-key" value={key} onChange={setKey} autoFocus={!!initialBaseUrl} />
           </div>
-          <button type="submit" className={`${buttonPrimary} w-full`} disabled={!key.trim()}>
+          <button type="submit" className={`${buttonPrimary} w-full`} disabled={!baseUrl.trim() || !key.trim()}>
             Начать
           </button>
         </form>
 
-        <a
-          href="https://aitunnel.ru/panel/keys"
-          target="_blank"
-          rel="noreferrer noopener"
-          className="mt-5 inline-flex items-center gap-1.5 rounded-lg text-sm font-medium text-violet-600 hover:underline focus-visible:outline-2 focus-visible:outline-violet-500 dark:text-violet-400"
-        >
-          Где взять ключ? aitunnel.ru/panel/keys
-          <ExternalLink className="size-3.5" aria-hidden="true" />
-        </a>
-
         <p className="mt-5 rounded-2xl bg-zinc-100 p-3 text-xs leading-relaxed text-zinc-600 dark:bg-zinc-800/60 dark:text-zinc-400">
-          Ключ хранится только в этом браузере (localStorage) и отправляется напрямую в API AITUNNEL. Никому не
-          передавайте его и не публикуйте.
+          Адрес и ключ хранятся только в этом браузере (localStorage), запросы идут напрямую к указанному API.
+          Никому не передавайте ключ и не публикуйте его.
         </p>
       </div>
     </main>

@@ -1,45 +1,61 @@
-import { ExternalLink, LogOut } from 'lucide-react'
+import { LogOut } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 
+import { normalizeBaseUrl } from '../lib/api'
 import { DEFAULT_MODEL } from '../lib/presets'
 import { ApiKeyInput } from './ApiKeyInput'
+import { BaseUrlInput } from './BaseUrlInput'
 import { Modal } from './Modal'
 import { buttonPrimary, buttonSecondary, inputBase } from './ui'
 
-interface SettingsDialogProps {
+interface SettingsValues {
+  baseUrl: string
   apiKey: string
   model: string
-  onSave: (values: { apiKey: string; model: string }) => void
+}
+
+interface SettingsDialogProps {
+  baseUrl: string
+  apiKey: string
+  model: string
+  onSave: (values: SettingsValues) => void
   onForgetKey: () => void
   onClose: () => void
 }
 
-export function SettingsDialog({ apiKey, model, onSave, onForgetKey, onClose }: SettingsDialogProps) {
+export function SettingsDialog({ baseUrl, apiKey, model, onSave, onForgetKey, onClose }: SettingsDialogProps) {
+  const [urlValue, setUrlValue] = useState(baseUrl)
   const [keyValue, setKeyValue] = useState(apiKey)
   const [modelValue, setModelValue] = useState(model)
 
+  const normalizedUrl = normalizeBaseUrl(urlValue)
+
   function submit(event: FormEvent): void {
     event.preventDefault()
-    onSave({ apiKey: keyValue.trim(), model: modelValue.trim() || DEFAULT_MODEL })
+    if (!normalizedUrl || !keyValue.trim()) return
+    onSave({ baseUrl: normalizedUrl, apiKey: keyValue.trim(), model: modelValue.trim() || DEFAULT_MODEL })
   }
 
   return (
     <Modal title="Настройки" onClose={onClose}>
-      <form onSubmit={submit} className="space-y-5">
+      <form onSubmit={submit} className="space-y-5" noValidate>
+        <div className="space-y-2">
+          <label htmlFor="settings-url" className="text-sm font-medium">
+            URL API
+          </label>
+          <BaseUrlInput
+            id="settings-url"
+            value={urlValue}
+            onChange={setUrlValue}
+            invalid={urlValue.trim() !== '' && normalizedUrl === null}
+          />
+        </div>
+
         <div className="space-y-2">
           <label htmlFor="settings-key" className="text-sm font-medium">
             API-ключ
           </label>
           <ApiKeyInput id="settings-key" value={keyValue} onChange={setKeyValue} />
-          <a
-            href="https://aitunnel.ru/panel/keys"
-            target="_blank"
-            rel="noreferrer noopener"
-            className="inline-flex items-center gap-1 rounded text-xs text-violet-600 hover:underline focus-visible:outline-2 focus-visible:outline-violet-500 dark:text-violet-400"
-          >
-            Получить ключ
-            <ExternalLink className="size-3" aria-hidden="true" />
-          </a>
         </div>
 
         <div className="space-y-2">
@@ -56,7 +72,7 @@ export function SettingsDialog({ apiKey, model, onSave, onForgetKey, onClose }: 
             className={`${inputBase} font-mono`}
           />
           <p className="text-xs text-zinc-500 dark:text-zinc-400">
-            По умолчанию {DEFAULT_MODEL}. Можно указать любую модель генерации изображений AITUNNEL.
+            По умолчанию {DEFAULT_MODEL}. Можно указать любую модель генерации изображений, которую поддерживает ваш API.
           </p>
         </div>
 
@@ -65,7 +81,7 @@ export function SettingsDialog({ apiKey, model, onSave, onForgetKey, onClose }: 
             <LogOut className="size-4" aria-hidden="true" />
             Забыть ключ
           </button>
-          <button type="submit" className={buttonPrimary} disabled={!keyValue.trim()}>
+          <button type="submit" className={buttonPrimary} disabled={!normalizedUrl || !keyValue.trim()}>
             Сохранить
           </button>
         </div>
