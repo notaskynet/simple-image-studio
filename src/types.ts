@@ -22,7 +22,12 @@ export interface GenerationMeta {
   inputIds?: string[]
   includeOriginal?: boolean
   version?: number
+  label?: string
 }
+
+export type ComposeMode = 'agent' | 'direct'
+
+export type TurnStatus = 'pending' | 'done' | 'error'
 
 export interface UserTurn {
   id: string
@@ -34,6 +39,7 @@ export interface UserTurn {
   baseId?: string
   attachmentIds: string[]
   includeOriginal: boolean
+  mode?: ComposeMode
   createdAt: number
 }
 
@@ -43,10 +49,44 @@ export interface AssistantTurn {
   requestId: string
   imageIds: string[]
   error?: string
+  status?: TurnStatus
+  size?: ImageSize
+  count?: number
+  edit?: boolean
   createdAt: number
 }
 
-export type Turn = UserTurn | AssistantTurn
+export interface ToolCallRecord {
+  id: string
+  name: string
+  args: string
+  prompt?: string
+  size?: ImageSize
+  count?: number
+  sourceIds?: string[]
+  status: 'running' | 'done' | 'error'
+  imageIds: string[]
+  result?: string
+  error?: string
+  startedAt: number
+}
+
+export interface AgentStep {
+  text: string
+  toolCalls: ToolCallRecord[]
+}
+
+export interface AgentTurn {
+  id: string
+  role: 'agent'
+  requestId: string
+  steps: AgentStep[]
+  status: TurnStatus
+  error?: string
+  createdAt: number
+}
+
+export type Turn = UserTurn | AssistantTurn | AgentTurn
 
 export interface Session {
   id: string
