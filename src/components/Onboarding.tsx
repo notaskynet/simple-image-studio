@@ -35,7 +35,7 @@ export function Onboarding({ initialBaseUrl, initialApiKey, onSave }: Onboarding
         <div className="mb-6 inline-flex size-12 items-center justify-center rounded-2xl bg-violet-600 text-white shadow-lg shadow-violet-600/30">
           <Sparkles className="size-6" aria-hidden="true" />
         </div>
-        <h1 className="text-2xl font-semibold tracking-tight">Добро пожаловать в Lumo</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Добро пожаловать в Simple Image Studio</h1>
         <p className="mt-2 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
           Создавайте изображения по текстовому описанию через любой OpenAI-совместимый API. Укажите адрес API и
           ключ — и можно начинать.

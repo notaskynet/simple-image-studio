@@ -285,7 +285,7 @@ export default function App() {
             <span className="inline-flex size-9 items-center justify-center rounded-xl bg-violet-600 text-white shadow-md shadow-violet-600/30">
               <Sparkles className="size-5" aria-hidden="true" />
             </span>
-            <h1 className="text-base font-semibold tracking-tight">Lumo</h1>
+            <h1 className="text-base font-semibold tracking-tight">Simple Image Studio</h1>
           </div>
           <div className="flex items-center gap-1">
             <span className="mr-2 hidden max-w-48 truncate rounded-full bg-zinc-100 px-3 py-1 font-mono text-xs text-zinc-600 sm:inline dark:bg-zinc-900 dark:text-zinc-400">
