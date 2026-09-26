@@ -1,19 +1,20 @@
-import { History, Moon, Plus, Settings, Sparkles, Sun, WandSparkles } from 'lucide-react'
+import { Moon, PanelLeftOpen, Settings, SquarePen, Sun } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { ConfirmDialog } from './components/ConfirmDialog'
 import { Gallery } from './components/Gallery'
-import { SessionList } from './components/history/SessionList'
 import type { CardActions } from './components/ImageCard'
 import { Lightbox } from './components/Lightbox'
 import { Onboarding } from './components/Onboarding'
 import { SettingsDialog } from './components/SettingsDialog'
+import { Sidebar, type View } from './components/Sidebar'
 import { Composer, type PendingAttachment } from './components/studio/Composer'
 import { Feed, type PendingJob } from './components/studio/Feed'
 import type { ImageActions } from './components/studio/StudioImage'
 import { VersionStrip } from './components/studio/VersionStrip'
-import { focusRing, iconButton } from './components/ui'
+import { iconButton } from './components/ui'
 import { useElapsed } from './hooks/useElapsed'
+import { useMediaQuery } from './hooks/useMediaQuery'
 import { useTheme } from './hooks/useTheme'
 import { useToast } from './hooks/useToast'
 import { ApiError, generateImages } from './lib/api'
@@ -34,8 +35,6 @@ import { DEFAULT_MODEL } from './lib/presets'
 import { nextVersion, sessionImages, sessionTitle } from './lib/sessions'
 import { settings } from './lib/settings'
 import type { AssistantTurn, GenerationMeta, ImageSize, Session, StudioRequest, StyleId, UserTurn } from './types'
-
-type Tab = 'studio' | 'history'
 
 interface LightboxState {
   ids: string[]
@@ -64,7 +63,11 @@ function isAbort(error: unknown): boolean {
 export default function App() {
   const notify = useToast()
   const [theme, toggleTheme] = useTheme()
-  const [tab, setTab] = useState<Tab>('studio')
+  const [view, setView] = useState<View>('studio')
+  const isDesktop = useMediaQuery('(min-width: 768px)')
+  const [desktopSidebar, setDesktopSidebar] = useState(settings.getSidebarOpen)
+  const [mobileSidebar, setMobileSidebar] = useState(false)
+  const sidebarOpen = isDesktop ? desktopSidebar : mobileSidebar
   const [baseUrl, setBaseUrl] = useState(settings.getBaseUrl)
   const [apiKey, setApiKey] = useState(settings.getApiKey)
   const [model, setModel] = useState(() => settings.getModel() ?? DEFAULT_MODEL)
@@ -113,6 +116,15 @@ export default function App() {
     settings.setSessionId(currentId)
   }, [currentId])
 
+  useEffect(() => {
+    if (!mobileSidebar || isDesktop) return
+    function onKeyDown(event: KeyboardEvent): void {
+      if (event.key === 'Escape') setMobileSidebar(false)
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [mobileSidebar, isDesktop])
+
   const byId = useMemo(() => new Map(history.map((m) => [m.id, m])), [history])
   const currentSession = sessions.find((s) => s.id === currentId)
   const versions = useMemo(
@@ -137,9 +149,9 @@ export default function App() {
 
   const turnCount = currentSession?.turns.length ?? 0
   useEffect(() => {
-    if (tab !== 'studio' || turnCount === 0) return
+    if (view !== 'studio' || turnCount === 0) return
     requestAnimationFrame(() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' }))
-  }, [tab, turnCount, job, currentId])
+  }, [view, turnCount, job, currentId])
 
   const commitSession = useCallback(
     (session: Session) => {
@@ -214,7 +226,14 @@ export default function App() {
 
       const controller = new AbortController()
       controllerRef.current = controller
-      setJob({ sessionId: session.id, requestId: userTurn.id, size: request.size, count: request.count, startedAt: now })
+      setJob({
+        sessionId: session.id,
+        requestId: userTurn.id,
+        size: request.size,
+        count: request.count,
+        edit: !!request.baseId || attachmentIds.length > 0,
+        startedAt: now,
+      })
 
       let assistant: AssistantTurn
       let pinTarget: GenerationMeta | undefined
@@ -315,15 +334,22 @@ export default function App() {
   const cancel = useCallback(() => controllerRef.current?.abort(), [])
 
   const submit = useCallback(() => {
+    const request = { text, styles, size, count, baseId, attachmentIds: [], includeOriginal }
     const files = attachments
-    void send({ text, styles, size, count, baseId, attachmentIds: [], includeOriginal }, files, currentId).then(
-      (started) => {
-        if (!started) return
-        setText('')
-        setAttachments([])
+    if (controllerRef.current || !text.trim()) {
+      void send(request, files, currentId)
+      return
+    }
+    setText('')
+    setAttachments([])
+    void send(request, files, currentId).then((started) => {
+      if (started) {
         files.forEach((f) => URL.revokeObjectURL(f.url))
-      },
-    )
+        return
+      }
+      setText((current) => current || request.text)
+      setAttachments((current) => (current.length ? current : files))
+    })
   }, [send, text, styles, size, count, baseId, includeOriginal, attachments, currentId])
 
   const retry = useCallback(
@@ -345,6 +371,11 @@ export default function App() {
     [send, currentId],
   )
 
+  const showStudio = useCallback(() => {
+    setView('studio')
+    setMobileSidebar(false)
+  }, [])
+
   const focusComposer = useCallback((value?: string) => {
     if (value !== undefined) setText(value)
     requestAnimationFrame(() => {
@@ -359,10 +390,10 @@ export default function App() {
     (meta: GenerationMeta) => {
       if (meta.sessionId && sessionsRef.current.some((s) => s.id === meta.sessionId)) setCurrentId(meta.sessionId)
       pin(meta)
-      setTab('studio')
+      showStudio()
       focusComposer()
     },
-    [pin, focusComposer],
+    [pin, focusComposer, showStudio],
   )
 
   const addFiles = useCallback(
@@ -388,18 +419,18 @@ export default function App() {
   const newSession = useCallback(() => {
     setCurrentId(null)
     pin(undefined)
-    setTab('studio')
+    showStudio()
     focusComposer()
-  }, [pin, focusComposer])
+  }, [pin, focusComposer, showStudio])
 
   const openSession = useCallback(
     (session: Session) => {
       setCurrentId(session.id)
       const images = sessionImages(session, byId)
       pin(images.at(-1))
-      setTab('studio')
+      showStudio()
     },
-    [byId, pin],
+    [byId, pin, showStudio],
   )
 
   const download = useCallback(
@@ -500,7 +531,7 @@ export default function App() {
       onCopyPrompt: (meta) => void copyPrompt(meta.prompt),
       onRepeat: (meta) => {
         const target = meta.sessionId && sessionsRef.current.some((s) => s.id === meta.sessionId) ? meta.sessionId : currentId
-        setTab('studio')
+        showStudio()
         void send(
           {
             text: meta.prompt,
@@ -519,7 +550,7 @@ export default function App() {
       onToggleFavorite: toggleFavorite,
       onDelete: remove,
     }),
-    [gallery, download, copyImage, copyPrompt, currentId, send, refine, toggleFavorite, remove],
+    [gallery, download, copyImage, copyPrompt, currentId, send, refine, toggleFavorite, remove, showStudio],
   )
 
   const scrollToVersion = useCallback((meta: GenerationMeta) => {
@@ -573,44 +604,57 @@ export default function App() {
     return <Onboarding initialBaseUrl={baseUrl} initialApiKey={apiKey} onSave={saveConnection} />
   }
 
-  const tabButton = (value: Tab, label: string, Icon: typeof History) => (
-    <button
-      type="button"
-      role="tab"
-      aria-selected={tab === value}
-      onClick={() => setTab(value)}
-      className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-sm font-medium transition ${focusRing} ${
-        tab === value
-          ? 'bg-white text-zinc-900 shadow-sm dark:bg-zinc-700 dark:text-white'
-          : 'text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100'
-      }`}
-    >
-      <Icon className="size-4" aria-hidden="true" />
-      {label}
-    </button>
-  )
+  function setSidebar(open: boolean): void {
+    if (isDesktop) {
+      setDesktopSidebar(open)
+      settings.setSidebarOpen(open)
+    } else setMobileSidebar(open)
+  }
+
+  const title = view === 'gallery' ? 'Галерея' : (currentSession?.title ?? 'Новая сессия')
 
   return (
-    <div className="min-h-dvh">
-      <header className="sticky top-0 z-40 border-b border-zinc-200/70 bg-zinc-50/80 backdrop-blur-lg dark:border-zinc-800/70 dark:bg-zinc-950/80">
-        <div className="mx-auto flex h-16 max-w-[1600px] items-center justify-between gap-3 px-4 sm:px-6">
-          <div className="flex min-w-0 items-center gap-2.5">
-            <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-xl bg-violet-600 text-white shadow-md shadow-violet-600/30">
-              <Sparkles className="size-5" aria-hidden="true" />
-            </span>
-            <h1 className="hidden truncate text-base font-semibold tracking-tight lg:block">Simple Image Studio</h1>
-            <span className="sr-only lg:hidden">Simple Image Studio</span>
-          </div>
-          <div
-            role="tablist"
-            aria-label="Разделы"
-            className="flex gap-1 rounded-2xl border border-zinc-200 bg-zinc-100 p-1 dark:border-zinc-800 dark:bg-zinc-900"
-          >
-            {tabButton('studio', 'Студия', WandSparkles)}
-            {tabButton('history', 'История', History)}
-          </div>
-          <div className="flex items-center gap-1">
-            <span className="mr-2 hidden max-w-48 truncate rounded-full bg-zinc-100 px-3 py-1 font-mono text-xs text-zinc-600 xl:inline dark:bg-zinc-900 dark:text-zinc-400">
+    <div className="flex min-h-dvh">
+      <Sidebar
+        open={sidebarOpen}
+        sessions={sessions}
+        currentId={currentId}
+        view={view}
+        galleryCount={galleryTotal}
+        busySessionId={job?.sessionId ?? null}
+        onClose={() => setSidebar(false)}
+        onNew={newSession}
+        onOpenGallery={() => {
+          setView('gallery')
+          setMobileSidebar(false)
+        }}
+        onOpenSession={openSession}
+        onDeleteSession={(session) => setConfirm({ kind: 'session', session })}
+      />
+
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="sticky top-0 z-30 border-b border-zinc-200/70 bg-zinc-50/80 backdrop-blur-lg dark:border-zinc-800/70 dark:bg-zinc-950/80">
+          <div className="flex h-16 items-center gap-2 px-3 sm:px-4">
+            {!sidebarOpen && (
+              <button
+                type="button"
+                onClick={() => setSidebar(true)}
+                className={iconButton}
+                aria-label="Показать боковую панель с историей"
+                aria-controls="sidebar"
+                aria-expanded={false}
+                title="История"
+              >
+                <PanelLeftOpen className="size-5" aria-hidden="true" />
+              </button>
+            )}
+            {!sidebarOpen && (
+              <button type="button" onClick={newSession} className={iconButton} aria-label="Новая сессия" title="Новая сессия">
+                <SquarePen className="size-5" aria-hidden="true" />
+              </button>
+            )}
+            <h1 className="min-w-0 flex-1 truncate px-1 text-sm font-semibold sm:text-base">{title}</h1>
+            <span className="mr-1 hidden max-w-48 truncate rounded-full bg-zinc-100 px-3 py-1 font-mono text-xs text-zinc-600 lg:inline dark:bg-zinc-900 dark:text-zinc-400">
               {model}
             </span>
             <button
@@ -626,91 +670,73 @@ export default function App() {
               <Settings className="size-5" aria-hidden="true" />
             </button>
           </div>
-        </div>
-      </header>
+        </header>
 
-      {tab === 'studio' ? (
-        <main className="mx-auto flex min-h-[calc(100dvh-4rem)] max-w-3xl flex-col px-4 sm:px-6" aria-label="Студия">
-          <div className="sticky top-16 z-20 -mx-4 border-b border-zinc-200/70 bg-zinc-50/90 px-4 pt-3 backdrop-blur-lg sm:-mx-6 sm:px-6 dark:border-zinc-800/70 dark:bg-zinc-950/90">
-            <div className="flex items-center justify-between gap-3 pb-2">
-              <h2 className="truncate text-sm font-semibold">{currentSession?.title ?? 'Новая сессия'}</h2>
-              <button
-                type="button"
-                onClick={newSession}
-                disabled={!currentSession}
-                className={`inline-flex shrink-0 items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-sm text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-900 disabled:opacity-40 dark:text-zinc-400 dark:hover:bg-zinc-900 dark:hover:text-zinc-100 ${focusRing}`}
-              >
-                <Plus className="size-4" aria-hidden="true" />
-                Новая сессия
-              </button>
-            </div>
-            <VersionStrip versions={versions} byId={byId} pinnedId={baseId} onSelect={scrollToVersion} />
-          </div>
+        {view === 'studio' ? (
+          <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col px-4 sm:px-6" aria-label="Студия">
+            {versions.length > 1 && (
+              <div className="sticky top-16 z-20 -mx-4 border-b border-zinc-200/70 bg-zinc-50/90 px-4 backdrop-blur-lg sm:-mx-6 sm:px-6 dark:border-zinc-800/70 dark:bg-zinc-950/90">
+                <VersionStrip versions={versions} byId={byId} pinnedId={baseId} onSelect={scrollToVersion} />
+              </div>
+            )}
 
-          <Feed
-            session={currentSession}
-            byId={byId}
-            job={job}
-            elapsed={elapsed}
-            pinnedId={baseId}
-            actions={studioActions}
-            onRetry={retry}
-            onCopyText={(value) => void copyPrompt(value)}
-            onExample={(value) => focusComposer(value)}
-            onCancel={cancel}
-          />
+            <Feed
+              session={currentSession}
+              byId={byId}
+              job={job}
+              elapsed={elapsed}
+              pinnedId={baseId}
+              actions={studioActions}
+              onRetry={retry}
+              onCopyText={(value) => void copyPrompt(value)}
+              onExample={(value) => focusComposer(value)}
+              onCancel={cancel}
+            />
 
-          <Composer
-            text={text}
-            onTextChange={setText}
-            size={size}
-            onSizeChange={setSize}
-            count={count}
-            onCountChange={setCount}
-            styles={styles}
-            onToggleStyle={(id) => setStyles((cur) => (cur.includes(id) ? cur.filter((s) => s !== id) : [...cur, id]))}
-            base={base}
-            onClearBase={() => pin(undefined)}
-            original={original}
-            includeOriginal={includeOriginal}
-            onIncludeOriginalChange={setIncludeOriginal}
-            attachments={attachments}
-            onAddFiles={addFiles}
-            onRemoveAttachment={removeAttachment}
-            busy={job !== null}
-            elapsed={elapsed}
-            onSend={submit}
-            onCancel={cancel}
-            textareaRef={textareaRef}
-          />
-        </main>
-      ) : (
-        <main className="mx-auto max-w-[1600px] space-y-10 px-4 py-6 sm:px-6" aria-label="История">
-          <SessionList
-            sessions={sessions}
-            byId={byId}
-            currentId={currentId}
-            onOpen={openSession}
-            onDelete={(session) => setConfirm({ kind: 'session', session })}
-            onNew={newSession}
-          />
-          <Gallery
-            total={galleryTotal}
-            items={gallery}
-            search={search}
-            onSearchChange={setSearch}
-            favoritesOnly={favoritesOnly}
-            onFavoritesOnlyChange={setFavoritesOnly}
-            onClear={() => setConfirm({ kind: 'clear' })}
-            onExample={(value) => {
-              setTab('studio')
-              focusComposer(value)
-            }}
-            actions={galleryActions}
-            busy={job !== null}
-          />
-        </main>
-      )}
+            <Composer
+              text={text}
+              onTextChange={setText}
+              size={size}
+              onSizeChange={setSize}
+              count={count}
+              onCountChange={setCount}
+              styles={styles}
+              onToggleStyle={(id) => setStyles((cur) => (cur.includes(id) ? cur.filter((s) => s !== id) : [...cur, id]))}
+              base={base}
+              onClearBase={() => pin(undefined)}
+              original={original}
+              includeOriginal={includeOriginal}
+              onIncludeOriginalChange={setIncludeOriginal}
+              attachments={attachments}
+              onAddFiles={addFiles}
+              onRemoveAttachment={removeAttachment}
+              busy={job !== null}
+              elapsed={elapsed}
+              onSend={submit}
+              onCancel={cancel}
+              textareaRef={textareaRef}
+            />
+          </main>
+        ) : (
+          <main className="w-full px-4 py-6 sm:px-6" aria-label="Галерея">
+            <Gallery
+              total={galleryTotal}
+              items={gallery}
+              search={search}
+              onSearchChange={setSearch}
+              favoritesOnly={favoritesOnly}
+              onFavoritesOnlyChange={setFavoritesOnly}
+              onClear={() => setConfirm({ kind: 'clear' })}
+              onExample={(value) => {
+                showStudio()
+                focusComposer(value)
+              }}
+              actions={galleryActions}
+              busy={job !== null}
+            />
+          </main>
+        )}
+      </div>
 
       {settingsOpen && (
         <SettingsDialog

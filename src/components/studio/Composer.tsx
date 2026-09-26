@@ -1,4 +1,4 @@
-import { ArrowUp, ChevronDown, ImagePlus, SlidersHorizontal, Square, X } from 'lucide-react'
+import { ArrowUp, ChevronDown, ImagePlus, PencilLine, Plus, SlidersHorizontal, Square, X } from 'lucide-react'
 import { useId, useLayoutEffect, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent, type RefObject } from 'react'
 
 import { formatBySize, STYLES } from '../../lib/presets'
@@ -119,19 +119,22 @@ export function Composer(props: ComposerProps) {
         {hasTray && (
           <div className="flex flex-wrap items-center gap-2 px-3 pt-3">
             {base && (
-              <div className="flex items-center gap-2 rounded-2xl bg-violet-50 py-1 pr-1 pl-1 text-xs text-violet-700 dark:bg-violet-500/10 dark:text-violet-300">
+              <div className="flex items-center gap-2 rounded-2xl bg-violet-50 py-1 pr-3 pl-1 text-xs text-violet-700 dark:bg-violet-500/10 dark:text-violet-300">
                 <Thumb meta={base} className="size-9 rounded-xl" />
-                <span className="font-medium">Дорабатываем v{base.version ?? 1}</span>
-                <button
-                  type="button"
-                  onClick={props.onClearBase}
-                  className={`inline-flex size-7 items-center justify-center rounded-lg transition hover:bg-violet-100 dark:hover:bg-violet-500/20 ${focusRing}`}
-                  aria-label="Открепить изображение — следующее сообщение создаст новое"
-                  title="Открепить"
-                >
-                  <X className="size-3.5" aria-hidden="true" />
-                </button>
+                <PencilLine className="size-3.5" aria-hidden="true" />
+                <span className="font-medium">Изменяем v{base.version ?? 1}</span>
               </div>
+            )}
+            {base && (
+              <button
+                type="button"
+                onClick={props.onClearBase}
+                className={`inline-flex items-center gap-1.5 rounded-2xl border border-zinc-200 px-2.5 py-2 text-xs font-medium text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-900 dark:border-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100 ${focusRing}`}
+                title="Следующее сообщение создаст новое изображение с нуля"
+              >
+                <Plus className="size-3.5" aria-hidden="true" />
+                Новое изображение
+              </button>
             )}
             {base && original && (
               <label className="flex cursor-pointer items-center gap-2 rounded-2xl border border-zinc-200 px-2.5 py-2 text-xs text-zinc-600 select-none dark:border-zinc-800 dark:text-zinc-400">
@@ -161,7 +164,7 @@ export function Composer(props: ComposerProps) {
         )}
 
         <label htmlFor="prompt" className="sr-only">
-          {base ? 'Что изменить в изображении' : 'Описание изображения'}
+          {base ? `Что изменить в v${base.version ?? 1}` : 'Описание изображения'}
         </label>
         <textarea
           id="prompt"
@@ -171,7 +174,7 @@ export function Composer(props: ComposerProps) {
           onKeyDown={onKeyDown}
           onPaste={onPaste}
           rows={1}
-          placeholder={base ? `Что изменить в v${base.version ?? 1}? Например: сделай небо закатным` : 'Опишите изображение, которое хотите получить…'}
+          placeholder={base ? `Что изменить в v${base.version ?? 1}? Например: сделай небо закатным` : 'Опишите новое изображение…'}
           aria-describedby={hintId}
           className="block max-h-60 min-h-14 w-full resize-none bg-transparent px-4 pt-4 pb-2 text-[15px] leading-relaxed text-zinc-900 placeholder:text-zinc-400 focus:outline-none dark:text-zinc-100 dark:placeholder:text-zinc-500"
         />
@@ -231,8 +234,8 @@ export function Composer(props: ComposerProps) {
                 onClick={props.onSend}
                 disabled={!canSend}
                 className={`inline-flex size-10 items-center justify-center rounded-2xl bg-violet-600 text-white shadow-lg shadow-violet-600/25 transition hover:bg-violet-500 active:scale-95 disabled:cursor-not-allowed disabled:bg-zinc-300 disabled:shadow-none dark:disabled:bg-zinc-700 ${focusRing}`}
-                aria-label={base ? 'Доработать изображение' : 'Сгенерировать'}
-                title={base ? 'Доработать' : 'Сгенерировать'}
+                aria-label={base ? `Изменить v${base.version ?? 1}` : 'Создать изображение'}
+                title={base ? 'Изменить' : 'Создать'}
               >
                 <ArrowUp className="size-5" aria-hidden="true" />
               </button>
