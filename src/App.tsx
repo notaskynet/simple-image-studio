@@ -9,32 +9,22 @@ import { Onboarding } from './components/Onboarding'
 import { SettingsDialog } from './components/SettingsDialog'
 import { Sidebar, type View } from './components/Sidebar'
 import { Composer, type PendingAttachment } from './components/studio/Composer'
-import { Feed, type PendingJob } from './components/studio/Feed'
+import { Feed } from './components/studio/Feed'
 import type { ImageActions } from './components/studio/StudioImage'
 import { VersionStrip } from './components/studio/VersionStrip'
 import { iconButton } from './components/ui'
-import { useElapsed } from './hooks/useElapsed'
 import { useMediaQuery } from './hooks/useMediaQuery'
+import { createId, errorMessage, useStudioEngine } from './hooks/useStudioEngine'
 import { useTheme } from './hooks/useTheme'
 import { useToast } from './hooks/useToast'
-import { ApiError, generateImages } from './lib/api'
-import { buildPrompt, getLineage } from './lib/context'
-import {
-  clearHistory,
-  deleteGeneration,
-  deleteSession,
-  getImageBlob,
-  loadHistory,
-  loadSessions,
-  saveGeneration,
-  saveSession,
-  updateMeta,
-} from './lib/db'
+import { DEFAULT_CHAT_MODEL, DEFAULT_SYSTEM_PROMPT } from './lib/agent'
+import { getLineage } from './lib/context'
+import { getImageBlob } from './lib/db'
 import { buildFileName, copyImageToClipboard, copyText, downloadBlob } from './lib/image'
 import { DEFAULT_MODEL } from './lib/presets'
-import { nextVersion, sessionImages, sessionTitle } from './lib/sessions'
+import { sessionImages } from './lib/sessions'
 import { settings } from './lib/settings'
-import type { AssistantTurn, GenerationMeta, ImageSize, Session, StudioRequest, StyleId, UserTurn } from './types'
+import type { ComposeMode, GenerationMeta, ImageSize, Session, StyleId, UserTurn } from './types'
 
 interface LightboxState {
   ids: string[]
@@ -43,22 +33,6 @@ interface LightboxState {
 }
 
 type ConfirmState = { kind: 'clear' } | { kind: 'session'; session: Session } | null
-
-function createId(): string {
-  return typeof crypto.randomUUID === 'function'
-    ? crypto.randomUUID()
-    : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
-}
-
-function errorMessage(error: unknown): string {
-  if (error instanceof ApiError) return error.message
-  if (error instanceof Error && error.message) return error.message
-  return 'Что-то пошло не так'
-}
-
-function isAbort(error: unknown): boolean {
-  return error instanceof DOMException && error.name === 'AbortError'
-}
 
 export default function App() {
   const notify = useToast()
@@ -71,8 +45,10 @@ export default function App() {
   const [baseUrl, setBaseUrl] = useState(settings.getBaseUrl)
   const [apiKey, setApiKey] = useState(settings.getApiKey)
   const [model, setModel] = useState(() => settings.getModel() ?? DEFAULT_MODEL)
-  const [history, setHistory] = useState<GenerationMeta[]>([])
-  const [sessions, setSessions] = useState<Session[]>([])
+  const [chatModel, setChatModel] = useState(() => settings.getChatModel() ?? DEFAULT_CHAT_MODEL)
+  const [systemPrompt, setSystemPrompt] = useState(() => settings.getSystemPrompt() ?? DEFAULT_SYSTEM_PROMPT)
+  const [vision, setVision] = useState(settings.getVision)
+  const [mode, setMode] = useState<ComposeMode>(settings.getMode)
   const [currentId, setCurrentId] = useState<string | null>(settings.getSessionId)
   const [text, setText] = useState(settings.getDraft)
   const [size, setSize] = useState<ImageSize>('1024x1024')
@@ -81,31 +57,33 @@ export default function App() {
   const [baseId, setBaseId] = useState<string | undefined>()
   const [includeOriginal, setIncludeOriginal] = useState(false)
   const [attachments, setAttachments] = useState<PendingAttachment[]>([])
-  const [job, setJob] = useState<PendingJob | null>(null)
   const [search, setSearch] = useState('')
   const [favoritesOnly, setFavoritesOnly] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [confirm, setConfirm] = useState<ConfirmState>(null)
   const [lightbox, setLightbox] = useState<LightboxState | null>(null)
-  const controllerRef = useRef<AbortController | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const sessionsRef = useRef(sessions)
-  const historyRef = useRef(history)
-  const elapsed = useElapsed(job?.startedAt ?? null)
+  const currentIdRef = useRef(currentId)
 
-  useEffect(() => {
-    sessionsRef.current = sessions
-    historyRef.current = history
+  const pin = useCallback((meta: GenerationMeta | undefined) => {
+    setBaseId(meta?.id)
+    setIncludeOriginal(false)
+    if (meta) setSize(meta.size)
+  }, [])
+
+  const onCreated = useCallback(
+    (sessionId: string, metas: GenerationMeta[]) => {
+      if (sessionId === currentIdRef.current && metas.length === 1) pin(metas[0])
+    },
+    [pin],
+  )
+
+  const engine = useStudioEngine({
+    config: { baseUrl, apiKey, model, chatModel, systemPrompt, vision },
+    notify,
+    onCreated,
   })
-
-  useEffect(() => {
-    Promise.all([loadHistory(), loadSessions()])
-      .then(([metas, stored]) => {
-        setHistory(metas)
-        setSessions(stored)
-      })
-      .catch(() => notify('Не удалось загрузить историю', 'error'))
-  }, [notify])
+  const { sessions, history } = engine
 
   useEffect(() => {
     const timer = setTimeout(() => settings.setDraft(text), 300)
@@ -114,7 +92,12 @@ export default function App() {
 
   useEffect(() => {
     settings.setSessionId(currentId)
+    currentIdRef.current = currentId
   }, [currentId])
+
+  useEffect(() => {
+    settings.setMode(mode)
+  }, [mode])
 
   useEffect(() => {
     if (!mobileSidebar || isDesktop) return
@@ -147,210 +130,45 @@ export default function App() {
   }, [history, search, favoritesOnly])
   const galleryTotal = useMemo(() => history.filter((m) => m.kind !== 'upload').length, [history])
 
+  const busyIds = useMemo(
+    () => new Set(sessions.filter((s) => s.turns.some((t) => t.role !== 'user' && t.status === 'pending')).map((s) => s.id)),
+    [sessions],
+  )
+
   const turnCount = currentSession?.turns.length ?? 0
   useEffect(() => {
     if (view !== 'studio' || turnCount === 0) return
     requestAnimationFrame(() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' }))
-  }, [view, turnCount, job, currentId])
+  }, [view, turnCount, currentId])
 
-  const commitSession = useCallback(
-    (session: Session) => {
-      setSessions((list) => [session, ...list.filter((s) => s.id !== session.id)])
-      saveSession(session).catch(() => notify('Не удалось сохранить сессию', 'error'))
-    },
-    [notify],
-  )
+  useEffect(() => {
+    if (view !== 'studio' || !currentSession) return
+    const nearBottom = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 240
+    if (nearBottom) requestAnimationFrame(() => window.scrollTo({ top: document.documentElement.scrollHeight }))
+  }, [view, currentSession])
 
-  const pin = useCallback((meta: GenerationMeta | undefined) => {
-    setBaseId(meta?.id)
-    setIncludeOriginal(false)
-    if (meta) setSize(meta.size)
-  }, [])
-
-  const send = useCallback(
-    async (request: StudioRequest, files: PendingAttachment[], targetId: string | null): Promise<boolean> => {
-      if (controllerRef.current) return false
-      if (!request.text.trim()) {
-        notify('Напишите, что нужно сделать', 'info')
-        textareaRef.current?.focus()
-        return false
-      }
-      const now = Date.now()
-      let session: Session = sessionsRef.current.find((s) => s.id === targetId) ?? {
-        id: createId(),
-        title: sessionTitle(request.text),
-        createdAt: now,
-        updatedAt: now,
-        turns: [],
-      }
-
-      const uploads: { meta: GenerationMeta; blob: Blob }[] = files.map((file, i) => ({
-        blob: file.blob,
-        meta: {
-          id: createId(),
-          prompt: '',
-          styles: [],
-          model: '',
-          size: request.size,
-          createdAt: now + i,
-          favorite: false,
-          mime: file.blob.type || 'image/png',
-          kind: 'upload',
-          sessionId: session.id,
-        },
-      }))
-      try {
-        await Promise.all(uploads.map((u) => saveGeneration(u.meta, u.blob)))
-      } catch {
-        notify('Не удалось сохранить прикреплённые фото', 'error')
-        return false
-      }
-      const attachmentIds = [...request.attachmentIds, ...uploads.map((u) => u.meta.id)]
-      if (uploads.length) setHistory((items) => [...uploads.map((u) => u.meta), ...items])
-
-      const userTurn: UserTurn = {
-        id: createId(),
-        role: 'user',
-        text: request.text.trim(),
-        styles: request.styles,
-        size: request.size,
-        count: request.count,
-        baseId: request.baseId,
-        attachmentIds,
-        includeOriginal: request.includeOriginal,
-        createdAt: now,
-      }
-      session = { ...session, updatedAt: now, turns: [...session.turns, userTurn] }
-      commitSession(session)
-      setCurrentId(session.id)
-
-      const controller = new AbortController()
-      controllerRef.current = controller
-      setJob({
-        sessionId: session.id,
-        requestId: userTurn.id,
-        size: request.size,
-        count: request.count,
-        edit: !!request.baseId || attachmentIds.length > 0,
-        startedAt: now,
-      })
-
-      let assistant: AssistantTurn
-      let pinTarget: GenerationMeta | undefined
-      try {
-        const metasById = new Map(historyRef.current.map((m) => [m.id, m]))
-        uploads.forEach((u) => metasById.set(u.meta.id, u.meta))
-        const baseMeta = request.baseId ? metasById.get(request.baseId) : undefined
-        if (request.baseId && !baseMeta) throw new ApiError('Изображение для доработки было удалено')
-        const chain = getLineage(baseMeta, metasById)
-        const inputs: GenerationMeta[] = []
-        if (baseMeta) inputs.push(baseMeta)
-        if (baseMeta && request.includeOriginal && chain.length > 1) inputs.push(chain[0])
-        attachmentIds.forEach((id) => {
-          const meta = metasById.get(id)
-          if (meta) inputs.push(meta)
-        })
-        const blobs = await Promise.all(
-          inputs.map(async (meta) => {
-            const blob = await getImageBlob(meta)
-            if (!blob) throw new ApiError('Не удалось прочитать исходное изображение')
-            return blob
-          }),
-        )
-
-        const images = await generateImages({
-          baseUrl,
-          apiKey,
-          model,
-          prompt: buildPrompt({
-            text: request.text,
-            styles: request.styles,
-            lineage: chain,
-            attachmentCount: attachmentIds.length,
-            includeOriginal: request.includeOriginal,
-          }),
-          size: request.size,
-          count: request.count,
-          images: blobs.length ? blobs : undefined,
-          signal: controller.signal,
-        })
-
-        const latest = sessionsRef.current.find((s) => s.id === session.id) ?? session
-        const firstVersion = nextVersion(latest, metasById)
-        const createdAt = Date.now()
-        const metas = await Promise.all(
-          images.map(async (image, i) => {
-            const meta: GenerationMeta = {
-              id: createId(),
-              prompt: userTurn.text,
-              styles: request.styles,
-              model,
-              size: request.size,
-              createdAt: createdAt + i,
-              favorite: false,
-              mime: image.blob?.type ?? 'image/png',
-              remoteUrl: image.blob ? undefined : image.url,
-              kind: 'generated',
-              sessionId: session.id,
-              parentId: baseMeta?.id,
-              inputIds: attachmentIds.length ? attachmentIds : undefined,
-              includeOriginal: request.includeOriginal || undefined,
-              version: firstVersion + i,
-            }
-            await saveGeneration(meta, image.blob)
-            return meta
-          }),
-        )
-        setHistory((items) => [...[...metas].reverse(), ...items])
-        assistant = { id: createId(), role: 'assistant', requestId: userTurn.id, imageIds: metas.map((m) => m.id), createdAt }
-        if (metas.length === 1) pinTarget = metas[0]
-        if (metas.length < request.count) notify(`Получено изображений: ${metas.length} из ${request.count}`, 'info')
-      } catch (error) {
-        const aborted = isAbort(error) || controller.signal.aborted
-        assistant = {
-          id: createId(),
-          role: 'assistant',
-          requestId: userTurn.id,
-          imageIds: [],
-          error: aborted ? 'Генерация отменена' : errorMessage(error),
-          createdAt: Date.now(),
-        }
-        if (!aborted) notify(errorMessage(error), 'error')
-      } finally {
-        controllerRef.current = null
-        setJob(null)
-      }
-
-      const latest = sessionsRef.current.find((s) => s.id === session.id)
-      if (latest) {
-        commitSession({ ...latest, updatedAt: Date.now(), turns: [...latest.turns, assistant] })
-        if (pinTarget) pin(pinTarget)
-      }
-      return true
-    },
-    [baseUrl, apiKey, model, notify, commitSession, pin],
-  )
-
-  const cancel = useCallback(() => controllerRef.current?.abort(), [])
+  const send = engine.send
 
   const submit = useCallback(() => {
-    const request = { text, styles, size, count, baseId, attachmentIds: [], includeOriginal }
-    const files = attachments
-    if (controllerRef.current || !text.trim()) {
-      void send(request, files, currentId)
+    if (!text.trim()) {
+      notify(mode === 'agent' ? 'Напишите сообщение' : 'Напишите, что нужно сделать', 'info')
+      textareaRef.current?.focus()
       return
     }
+    const request = { text, styles, size, count, baseId, attachmentIds: [], includeOriginal }
+    const files = attachments
     setText('')
     setAttachments([])
-    void send(request, files, currentId).then((started) => {
-      if (started) {
+    void send(request, files.map((f) => f.blob), currentId, mode).then((sessionId) => {
+      if (sessionId) {
+        setCurrentId(sessionId)
         files.forEach((f) => URL.revokeObjectURL(f.url))
         return
       }
       setText((current) => current || request.text)
       setAttachments((current) => (current.length ? current : files))
     })
-  }, [send, text, styles, size, count, baseId, includeOriginal, attachments, currentId])
+  }, [send, text, styles, size, count, baseId, includeOriginal, attachments, currentId, mode, notify])
 
   const retry = useCallback(
     (turn: UserTurn) => {
@@ -366,6 +184,7 @@ export default function App() {
         },
         [],
         currentId,
+        turn.mode ?? 'direct',
       )
     },
     [send, currentId],
@@ -388,12 +207,12 @@ export default function App() {
 
   const refine = useCallback(
     (meta: GenerationMeta) => {
-      if (meta.sessionId && sessionsRef.current.some((s) => s.id === meta.sessionId)) setCurrentId(meta.sessionId)
+      if (meta.sessionId && sessions.some((s) => s.id === meta.sessionId)) setCurrentId(meta.sessionId)
       pin(meta)
       showStudio()
       focusComposer()
     },
-    [pin, focusComposer, showStudio],
+    [sessions, pin, focusComposer, showStudio],
   )
 
   const addFiles = useCallback(
@@ -474,32 +293,15 @@ export default function App() {
     [notify],
   )
 
-  const toggleFavorite = useCallback(
-    async (meta: GenerationMeta) => {
-      const updated = { ...meta, favorite: !meta.favorite }
-      setHistory((items) => items.map((m) => (m.id === meta.id ? updated : m)))
-      try {
-        await updateMeta(updated)
-      } catch {
-        setHistory((items) => items.map((m) => (m.id === meta.id ? meta : m)))
-        notify('Не удалось сохранить', 'error')
-      }
-    },
-    [notify],
-  )
+  const toggleFavorite = engine.toggleFavorite
 
   const remove = useCallback(
     async (meta: GenerationMeta) => {
-      try {
-        await deleteGeneration(meta.id)
-        setHistory((items) => items.filter((m) => m.id !== meta.id))
-        setBaseId((id) => (id === meta.id ? undefined : id))
-        notify('Удалено')
-      } catch {
-        notify('Не удалось удалить', 'error')
-      }
+      if (!(await engine.removeImage(meta))) return
+      setBaseId((id) => (id === meta.id ? undefined : id))
+      notify('Удалено')
     },
-    [notify],
+    [engine, notify],
   )
 
   const studioActions = useMemo<ImageActions>(
@@ -530,8 +332,9 @@ export default function App() {
       onCopyImage: copyImage,
       onCopyPrompt: (meta) => void copyPrompt(meta.prompt),
       onRepeat: (meta) => {
-        const target = meta.sessionId && sessionsRef.current.some((s) => s.id === meta.sessionId) ? meta.sessionId : currentId
+        const target = meta.sessionId && sessions.some((s) => s.id === meta.sessionId) ? meta.sessionId : currentId
         showStudio()
+        if (target) setCurrentId(target)
         void send(
           {
             text: meta.prompt,
@@ -544,13 +347,14 @@ export default function App() {
           },
           [],
           target,
+          'direct',
         )
       },
       onRefine: refine,
       onToggleFavorite: toggleFavorite,
       onDelete: remove,
     }),
-    [gallery, download, copyImage, copyPrompt, currentId, send, refine, toggleFavorite, remove, showStudio],
+    [gallery, download, copyImage, copyPrompt, currentId, sessions, send, refine, toggleFavorite, remove, showStudio],
   )
 
   const scrollToVersion = useCallback((meta: GenerationMeta) => {
@@ -570,18 +374,12 @@ export default function App() {
     if (!current) return
     try {
       if (current.kind === 'clear') {
-        cancel()
-        await clearHistory()
-        setHistory([])
-        setSessions([])
+        await engine.clearAll()
         setCurrentId(null)
         pin(undefined)
         notify('История очищена')
       } else {
-        const ids = historyRef.current.filter((m) => m.sessionId === current.session.id).map((m) => m.id)
-        await deleteSession(current.session, ids)
-        setSessions((list) => list.filter((s) => s.id !== current.session.id))
-        setHistory((items) => items.filter((m) => m.sessionId !== current.session.id))
+        await engine.removeSession(current.session)
         if (currentId === current.session.id) {
           setCurrentId(null)
           pin(undefined)
@@ -621,7 +419,7 @@ export default function App() {
         currentId={currentId}
         view={view}
         galleryCount={galleryTotal}
-        busySessionId={job?.sessionId ?? null}
+        busyIds={busyIds}
         onClose={() => setSidebar(false)}
         onNew={newSession}
         onOpenGallery={() => {
@@ -683,14 +481,12 @@ export default function App() {
             <Feed
               session={currentSession}
               byId={byId}
-              job={job}
-              elapsed={elapsed}
               pinnedId={baseId}
               actions={studioActions}
               onRetry={retry}
               onCopyText={(value) => void copyPrompt(value)}
               onExample={(value) => focusComposer(value)}
-              onCancel={cancel}
+              onCancel={engine.cancel}
             />
 
             <Composer
@@ -710,10 +506,9 @@ export default function App() {
               attachments={attachments}
               onAddFiles={addFiles}
               onRemoveAttachment={removeAttachment}
-              busy={job !== null}
-              elapsed={elapsed}
+              mode={mode}
+              onModeChange={setMode}
               onSend={submit}
-              onCancel={cancel}
               textareaRef={textareaRef}
             />
           </main>
@@ -732,7 +527,7 @@ export default function App() {
                 focusComposer(value)
               }}
               actions={galleryActions}
-              busy={job !== null}
+              busy={false}
             />
           </main>
         )}
@@ -743,19 +538,27 @@ export default function App() {
           baseUrl={baseUrl}
           apiKey={apiKey}
           model={model}
+          chatModel={chatModel}
+          systemPrompt={systemPrompt}
+          vision={vision}
           onClose={() => setSettingsOpen(false)}
           onSave={(values) => {
             settings.setBaseUrl(values.baseUrl)
             settings.setApiKey(values.apiKey)
             settings.setModel(values.model === DEFAULT_MODEL ? null : values.model)
+            settings.setChatModel(values.chatModel === DEFAULT_CHAT_MODEL ? null : values.chatModel)
+            settings.setSystemPrompt(values.systemPrompt === DEFAULT_SYSTEM_PROMPT ? null : values.systemPrompt)
+            settings.setVision(values.vision)
             setBaseUrl(values.baseUrl)
             setApiKey(values.apiKey)
             setModel(values.model)
+            setChatModel(values.chatModel)
+            setSystemPrompt(values.systemPrompt)
+            setVision(values.vision)
             setSettingsOpen(false)
             notify('Настройки сохранены')
           }}
           onForgetKey={() => {
-            cancel()
             settings.setApiKey(null)
             setApiKey('')
             setSettingsOpen(false)
