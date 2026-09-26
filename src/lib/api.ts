@@ -1,6 +1,6 @@
 import type { ImageSize } from '../types'
 
-const ENDPOINT = 'https://api.aitunnel.ru/v1/images/generations'
+const GENERATIONS_PATH = '/images/generations'
 
 export interface GeneratedImage {
   blob?: Blob
@@ -8,6 +8,7 @@ export interface GeneratedImage {
 }
 
 export interface GenerateParams {
+  baseUrl: string
   apiKey: string
   model: string
   prompt: string
@@ -35,6 +36,22 @@ interface ApiResponse {
   data?: ApiImageItem[]
   error?: { message?: string } | string
   message?: string
+}
+
+export function normalizeBaseUrl(value: string): string | null {
+  const trimmed = value.trim().replace(/\/+$/, '')
+  try {
+    const url = new URL(trimmed)
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') return null
+  } catch {
+    return null
+  }
+  return trimmed
+}
+
+function resolveEndpoint(baseUrl: string): string {
+  const base = baseUrl.trim().replace(/\/+$/, '')
+  return base.endsWith(GENERATIONS_PATH) ? base : `${base}${GENERATIONS_PATH}`
 }
 
 const BALANCE_PATTERN = /insufficient|balance|quota|credit|funds|баланс|средств/i
@@ -83,7 +100,7 @@ async function urlToImage(url: string, signal: AbortSignal): Promise<GeneratedIm
 async function requestImages(params: GenerateParams, n: number): Promise<GeneratedImage[]> {
   let response: Response
   try {
-    response = await fetch(ENDPOINT, {
+    response = await fetch(resolveEndpoint(params.baseUrl), {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${params.apiKey}`,
@@ -94,7 +111,7 @@ async function requestImages(params: GenerateParams, n: number): Promise<Generat
     })
   } catch (error) {
     if (params.signal.aborted) throw error
-    throw new ApiError('Нет соединения')
+    throw new ApiError('Нет соединения с API — проверьте URL и подключение к сети')
   }
 
   let body: ApiResponse | null = null
