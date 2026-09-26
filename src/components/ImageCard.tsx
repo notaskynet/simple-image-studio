@@ -1,4 +1,4 @@
-import { Copy, Download, ImageOff, RefreshCw, SquarePen, Star, Trash2, Clipboard } from 'lucide-react'
+import { Clipboard, Copy, Download, ImageOff, RefreshCw, Star, Trash2, Wand } from 'lucide-react'
 import { useState } from 'react'
 
 import { useImageUrl } from '../hooks/useImageUrl'
@@ -13,7 +13,7 @@ export interface CardActions {
   onCopyImage: (meta: GenerationMeta) => void
   onCopyPrompt: (meta: GenerationMeta) => void
   onRepeat: (meta: GenerationMeta) => void
-  onVary: (meta: GenerationMeta) => void
+  onRefine: (meta: GenerationMeta) => void
   onToggleFavorite: (meta: GenerationMeta) => void
   onDelete: (meta: GenerationMeta) => void
 }
@@ -137,11 +137,11 @@ export function ImageCard({ meta, actions, busy }: ImageCardProps) {
           <button
             type="button"
             className={actionButton}
-            onClick={() => actions.onVary(meta)}
-            aria-label="Вариации: подставить промпт для правки"
-            title="Вариации"
+            onClick={() => actions.onRefine(meta)}
+            aria-label="Доработать в Студии"
+            title="Доработать"
           >
-            <SquarePen className="size-4" aria-hidden="true" />
+            <Wand className="size-4" aria-hidden="true" />
           </button>
           <button
             type="button"
