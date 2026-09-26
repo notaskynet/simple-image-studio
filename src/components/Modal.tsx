@@ -60,7 +60,7 @@ export function Modal({ title, onClose, children }: ModalProps) {
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
-        className="relative w-full max-w-md animate-pop-in rounded-t-3xl border border-zinc-200 bg-white p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] shadow-2xl outline-none sm:rounded-3xl sm:pb-6 dark:border-zinc-800 dark:bg-zinc-900"
+        className="relative max-h-[92dvh] w-full max-w-md animate-pop-in overflow-y-auto overscroll-contain rounded-t-3xl border border-zinc-200 bg-white p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] shadow-2xl outline-none sm:rounded-3xl sm:pb-6 dark:border-zinc-800 dark:bg-zinc-900"
       >
         <div className="mb-5 flex items-center justify-between gap-4">
           <h2 id={titleId} className="text-lg font-semibold">

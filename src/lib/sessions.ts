@@ -1,14 +1,16 @@
-import type { GenerationMeta, Session } from '../types'
+import type { GenerationMeta, Session, Turn } from '../types'
+
+function turnImageIds(turn: Turn): string[] {
+  if (turn.role === 'assistant') return turn.imageIds
+  if (turn.role === 'agent') return turn.steps.flatMap((s) => s.toolCalls.flatMap((c) => c.imageIds))
+  return []
+}
 
 export function sessionImages(session: Session, byId: Map<string, GenerationMeta>): GenerationMeta[] {
   return session.turns
-    .flatMap((t) => (t.role === 'assistant' ? t.imageIds : []))
+    .flatMap(turnImageIds)
     .map((id) => byId.get(id))
     .filter((m): m is GenerationMeta => !!m)
-}
-
-export function nextVersion(session: Session, byId: Map<string, GenerationMeta>): number {
-  return sessionImages(session, byId).reduce((max, m) => Math.max(max, m.version ?? 0), 0) + 1
 }
 
 export function sessionTitle(text: string): string {

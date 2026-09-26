@@ -34,7 +34,7 @@ interface ApiImageItem {
   url?: string
 }
 
-interface ApiResponse {
+export interface ApiResponse {
   data?: ApiImageItem[]
   error?: { message?: string } | string
   message?: string
@@ -51,11 +51,17 @@ export function normalizeBaseUrl(value: string): string | null {
   return trimmed
 }
 
-function resolveEndpoint(baseUrl: string, edit: boolean): string {
+const KNOWN_PATHS = [GENERATIONS_PATH, EDITS_PATH, '/chat/completions']
+
+export function resolveApiUrl(baseUrl: string, path: string): string {
   let base = baseUrl.trim().replace(/\/+$/, '')
-  if (base.endsWith(GENERATIONS_PATH)) base = base.slice(0, -GENERATIONS_PATH.length)
-  else if (base.endsWith(EDITS_PATH)) base = base.slice(0, -EDITS_PATH.length)
-  return `${base}${edit ? EDITS_PATH : GENERATIONS_PATH}`
+  const known = KNOWN_PATHS.find((p) => base.endsWith(p))
+  if (known) base = base.slice(0, -known.length)
+  return `${base}${path}`
+}
+
+function resolveEndpoint(baseUrl: string, edit: boolean): string {
+  return resolveApiUrl(baseUrl, edit ? EDITS_PATH : GENERATIONS_PATH)
 }
 
 const EXTENSIONS: Record<string, string> = { 'image/jpeg': 'jpg', 'image/webp': 'webp' }
@@ -82,13 +88,13 @@ function buildBody(params: GenerateParams, n: number): { body: BodyInit; json: b
 const BALANCE_PATTERN = /insufficient|balance|quota|credit|funds|баланс|средств/i
 const MODEL_PATTERN = /model|модел/i
 
-function extractMessage(body: ApiResponse | null): string | null {
+export function extractMessage(body: ApiResponse | null): string | null {
   if (!body) return null
   if (typeof body.error === 'string') return body.error
   return body.error?.message ?? body.message ?? null
 }
 
-function toUserMessage(status: number, message: string | null, model: string): string {
+export function toUserMessage(status: number, message: string | null, model: string): string {
   if (status === 401) return 'Неверный ключ'
   if (status === 402 || (message && BALANCE_PATTERN.test(message))) return 'Пополните баланс'
   if (status === 404 || (status === 400 && message && MODEL_PATTERN.test(message))) {

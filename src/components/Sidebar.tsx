@@ -13,7 +13,7 @@ interface SidebarProps {
   currentId: string | null
   view: View
   galleryCount: number
-  busySessionId: string | null
+  busyIds: Set<string>
   onClose: () => void
   onNew: () => void
   onOpenGallery: () => void
@@ -155,7 +155,7 @@ export function Sidebar(props: SidebarProps) {
                             }`}
                           >
                             <span className="truncate">{session.title || 'Без названия'}</span>
-                            {props.busySessionId === session.id && <TypingDots className="ml-auto shrink-0 scale-75 text-violet-500" />}
+                            {props.busyIds.has(session.id) && <TypingDots className="ml-auto shrink-0 scale-75 text-violet-500" />}
                           </button>
                           <button
                             type="button"
