@@ -1,8 +1,9 @@
-import { CircleAlert, Clipboard, ImageOff, RefreshCw, Wand, WandSparkles } from 'lucide-react'
+import { CircleAlert, Clipboard, ImageOff, PencilLine, RefreshCw, WandSparkles } from 'lucide-react'
 
 import { EXAMPLE_PROMPTS, formatBySize, STYLES } from '../../lib/presets'
 import type { AssistantTurn, GenerationMeta, ImageSize, Session, UserTurn } from '../../types'
 import { Thumb } from '../Thumb'
+import { TypingDots } from '../TypingDots'
 import { focusRing } from '../ui'
 import { StudioImage, type ImageActions } from './StudioImage'
 
@@ -11,6 +12,7 @@ export interface PendingJob {
   requestId: string
   size: ImageSize
   count: number
+  edit: boolean
   startedAt: number
 }
 
@@ -47,15 +49,15 @@ function UserBubble({ turn, byId, onRetry, onCopyText, busy }: {
   if (turn.includeOriginal) meta.push('с исходником')
 
   return (
-    <div className="flex flex-col items-end gap-1.5">
+    <div className="group flex flex-col items-end gap-1.5">
       <div className="max-w-[85%] rounded-3xl rounded-br-lg bg-violet-600 px-4 py-3 text-[15px] leading-relaxed text-white shadow-sm shadow-violet-600/20">
         {(turn.baseId || attachments.length > 0) && (
           <div className="mb-2 flex flex-wrap items-center gap-2">
             {turn.baseId && (
               <span className="flex items-center gap-2 rounded-xl bg-white/15 py-1 pr-2.5 pl-1 text-xs font-medium">
                 {base ? <Thumb meta={base} className="size-7 rounded-lg" /> : <ImageOff className="size-4" aria-hidden="true" />}
-                <Wand className="size-3.5" aria-hidden="true" />
-                Доработка v{base?.version ?? 1}
+                <PencilLine className="size-3.5" aria-hidden="true" />
+                Правка v{base?.version ?? 1}
               </span>
             )}
             {attachments.map((item) => (
@@ -65,7 +67,7 @@ function UserBubble({ turn, byId, onRetry, onCopyText, busy }: {
         )}
         <p className="break-words whitespace-pre-wrap">{turn.text}</p>
       </div>
-      <div className="flex items-center gap-1 pr-1">
+      <div className="flex items-center gap-1 pr-1 opacity-0 transition group-focus-within:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100">
         <span className="text-[11px] text-zinc-500 dark:text-zinc-400">{meta.join(' · ')}</span>
         <button type="button" className={smallButton} onClick={() => onCopyText(turn.text)} aria-label="Копировать текст запроса">
           <Clipboard className="size-3.5" aria-hidden="true" />
@@ -138,7 +140,12 @@ function AssistantBubble({ turn, byId, pinnedId, actions, request, onRetry, busy
 function PendingBubble({ job, elapsed, onCancel }: { job: PendingJob; elapsed: number; onCancel: () => void }) {
   const format = formatBySize(job.size)
   return (
-    <div className="space-y-2" role="status" aria-label="Идёт генерация изображений">
+    <div className="space-y-3" role="status" aria-label="Идёт генерация изображений">
+      <div className="inline-flex items-center gap-3 rounded-3xl rounded-bl-lg bg-zinc-100 px-4 py-3 text-sm text-zinc-600 dark:bg-zinc-900 dark:text-zinc-300">
+        <TypingDots className="text-violet-500" />
+        <span>{job.edit ? 'Вношу правки' : job.count > 1 ? 'Создаю изображения' : 'Создаю изображение'}</span>
+        <span className="text-zinc-400 tabular-nums dark:text-zinc-500">{elapsed} с</span>
+      </div>
       <div className={gridClass(job.count)}>
         {Array.from({ length: job.count }, (_, i) => (
           <div
@@ -146,11 +153,7 @@ function PendingBubble({ job, elapsed, onCancel }: { job: PendingJob; elapsed: n
             className="shimmer relative overflow-hidden rounded-3xl border border-zinc-200 dark:border-zinc-800"
             style={{ aspectRatio: `${format.width} / ${format.height}` }}
             aria-hidden="true"
-          >
-            <span className="absolute bottom-3 left-3 rounded-full bg-white/70 px-2.5 py-1 text-xs font-medium text-zinc-600 tabular-nums backdrop-blur dark:bg-zinc-900/70 dark:text-zinc-300">
-              {elapsed} с
-            </span>
-          </div>
+          />
         ))}
       </div>
       <button type="button" onClick={onCancel} className={`${smallButton} text-rose-600! dark:text-rose-400!`}>
@@ -173,8 +176,8 @@ export function Feed({ session, byId, job, elapsed, pinnedId, actions, onRetry, 
         </div>
         <h2 className="text-xl font-semibold tracking-tight">Что создадим?</h2>
         <p className="mt-2 max-w-md text-sm text-zinc-600 dark:text-zinc-400">
-          Опишите изображение в поле ниже или прикрепите своё фото. Потом нажмите «Доработать» на результате и
-          пишите, что изменить: история правок учитывается автоматически.
+          Опишите изображение в поле ниже или прикрепите своё фото. Когда картинка будет готова, просто напишите,
+          что в ней изменить — предыдущие правки учитываются автоматически.
         </p>
         <ul className="mt-6 grid w-full max-w-2xl gap-3 sm:grid-cols-3">
           {EXAMPLE_PROMPTS.map((prompt) => (
