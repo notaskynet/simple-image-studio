@@ -1,9 +1,6 @@
-# AITUNNEL Images
+# simple-generation-page
 
-Одностраничное веб-приложение для генерации изображений по текстовому описанию через API [AITUNNEL](https://aitunnel.ru).
-Работает полностью в браузере, без бэкенда.
-
-**Страница:** https://notaskynet.github.io/simple-generation-page/
+Одностраничное веб-приложение для генерации изображений по текстовому описанию через API.
 
 ## Возможности
 
@@ -17,8 +14,6 @@
 
 ## API-ключ
 
-Ключ можно получить в панели AITUNNEL: https://aitunnel.ru/panel/keys
-
 Ключ вводится в приложении и хранится **только в localStorage вашего браузера**. В репозитории и коде его нет.
 Удалить ключ из браузера можно в настройках кнопкой «Забыть ключ».
 
@@ -30,10 +25,3 @@
 npm install
 npm run dev
 ```
-
-Приложение откроется по адресу `http://localhost:5173/simple-generation-page/`.
-
-## Деплой
-
-При пуше в `main` workflow `.github/workflows/deploy.yml` собирает проект и публикует его на GitHub Pages.
-В настройках репозитория (Settings → Pages → Build and deployment) источником должен быть выбран **GitHub Actions**.
