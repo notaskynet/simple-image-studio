@@ -20,7 +20,7 @@ export function ApiKeyInput({ id, value, onChange, autoFocus }: ApiKeyInputProps
         type={visible ? 'text' : 'password'}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        placeholder="sk-aitunnel-..."
+        placeholder="sk-..."
         autoComplete="off"
         spellCheck={false}
         data-autofocus={autoFocus ? true : undefined}

@@ -1,10 +1,11 @@
 import type { Theme } from '../types'
 
 const KEYS = {
-  apiKey: 'aitunnel.apiKey',
-  model: 'aitunnel.model',
-  theme: 'aitunnel.theme',
-  draft: 'aitunnel.draft',
+  baseUrl: 'lumo.baseUrl',
+  apiKey: 'lumo.apiKey',
+  model: 'lumo.model',
+  theme: 'lumo.theme',
+  draft: 'lumo.draft',
 } as const
 
 type SettingKey = keyof typeof KEYS
@@ -27,6 +28,8 @@ function write(key: SettingKey, value: string | null): void {
 }
 
 export const settings = {
+  getBaseUrl: (): string => read('baseUrl') ?? '',
+  setBaseUrl: (value: string | null): void => write('baseUrl', value),
   getApiKey: (): string => read('apiKey') ?? '',
   setApiKey: (value: string | null): void => write('apiKey', value),
   getModel: (): string | null => read('model'),
