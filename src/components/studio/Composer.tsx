@@ -1,8 +1,9 @@
-import { ArrowUp, ChevronDown, ImagePlus, PencilLine, Plus, SlidersHorizontal, Square, X } from 'lucide-react'
+import { ArrowUp, Bot, ChevronDown, ImagePlus, PencilLine, Plus, SlidersHorizontal, X, Zap } from 'lucide-react'
 import { useId, useLayoutEffect, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent, type RefObject } from 'react'
 
 import { formatBySize, STYLES } from '../../lib/presets'
-import type { GenerationMeta, ImageSize, StyleId } from '../../types'
+import { imageLabel } from '../../lib/agent'
+import type { ComposeMode, GenerationMeta, ImageSize, StyleId } from '../../types'
 import { Thumb } from '../Thumb'
 import { focusRing } from '../ui'
 import { OptionsPanel } from './OptionsPanel'
@@ -30,10 +31,9 @@ interface ComposerProps {
   attachments: PendingAttachment[]
   onAddFiles: (files: File[]) => void
   onRemoveAttachment: (id: string) => void
-  busy: boolean
-  elapsed: number
+  mode: ComposeMode
+  onModeChange: (value: ComposeMode) => void
   onSend: () => void
-  onCancel: () => void
   textareaRef: RefObject<HTMLTextAreaElement | null>
 }
 
@@ -45,13 +45,14 @@ function imageFiles(list: FileList | null | undefined): File[] {
 }
 
 export function Composer(props: ComposerProps) {
-  const { text, base, original, attachments, busy, textareaRef } = props
+  const { text, base, original, attachments, mode, textareaRef } = props
   const [optionsOpen, setOptionsOpen] = useState(false)
   const [dragging, setDragging] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
   const optionsId = useId()
   const hintId = useId()
-  const canSend = text.trim().length > 0 && !busy
+  const canSend = text.trim().length > 0
+  const direct = mode === 'direct'
   const styleLabels = STYLES.filter((s) => props.styles.includes(s.id)).map((s) => s.label)
   const summary = [formatBySize(props.size).ratio, `${props.count} шт.`, ...styleLabels].join(' · ')
 
@@ -102,7 +103,7 @@ export function Composer(props: ComposerProps) {
           dragging ? 'border-violet-500 ring-4 ring-violet-500/15' : 'border-zinc-200 dark:border-zinc-800'
         }`}
       >
-        {optionsOpen && (
+        {direct && optionsOpen && (
           <div className="animate-pop-in border-b border-zinc-200 p-4 dark:border-zinc-800">
             <OptionsPanel
               id={optionsId}
@@ -122,7 +123,7 @@ export function Composer(props: ComposerProps) {
               <div className="flex items-center gap-2 rounded-2xl bg-violet-50 py-1 pr-3 pl-1 text-xs text-violet-700 dark:bg-violet-500/10 dark:text-violet-300">
                 <Thumb meta={base} className="size-9 rounded-xl" />
                 <PencilLine className="size-3.5" aria-hidden="true" />
-                <span className="font-medium">Изменяем v{base.version ?? 1}</span>
+                <span className="font-medium">Изменяем {imageLabel(base)}</span>
               </div>
             )}
             {base && (
@@ -136,7 +137,7 @@ export function Composer(props: ComposerProps) {
                 Новое изображение
               </button>
             )}
-            {base && original && (
+            {direct && base && original && (
               <label className="flex cursor-pointer items-center gap-2 rounded-2xl border border-zinc-200 px-2.5 py-2 text-xs text-zinc-600 select-none dark:border-zinc-800 dark:text-zinc-400">
                 <input
                   type="checkbox"
@@ -164,7 +165,7 @@ export function Composer(props: ComposerProps) {
         )}
 
         <label htmlFor="prompt" className="sr-only">
-          {base ? `Что изменить в v${base.version ?? 1}` : 'Описание изображения'}
+          {base ? `Что изменить в ${imageLabel(base)}` : direct ? 'Описание изображения' : 'Сообщение агенту'}
         </label>
         <textarea
           id="prompt"
@@ -174,7 +175,13 @@ export function Composer(props: ComposerProps) {
           onKeyDown={onKeyDown}
           onPaste={onPaste}
           rows={1}
-          placeholder={base ? `Что изменить в v${base.version ?? 1}? Например: сделай небо закатным` : 'Опишите новое изображение…'}
+          placeholder={
+            base
+              ? `Что изменить в ${imageLabel(base)}? Например: сделай небо закатным`
+              : direct
+                ? 'Опишите новое изображение…'
+                : 'Расскажите агенту, что хотите создать…'
+          }
           aria-describedby={hintId}
           className="block max-h-60 min-h-14 w-full resize-none bg-transparent px-4 pt-4 pb-2 text-[15px] leading-relaxed text-zinc-900 placeholder:text-zinc-400 focus:outline-none dark:text-zinc-100 dark:placeholder:text-zinc-500"
         />
@@ -203,6 +210,37 @@ export function Composer(props: ComposerProps) {
           >
             <ImagePlus className="size-5" aria-hidden="true" />
           </button>
+          <div
+            role="radiogroup"
+            aria-label="Режим"
+            className="flex shrink-0 rounded-2xl border border-zinc-200 p-0.5 dark:border-zinc-800"
+          >
+            {(
+              [
+                ['agent', 'Агент', Bot, 'Чат с моделью: она уточнит идею и сама напишет промпт'],
+                ['direct', 'Напрямую', Zap, 'Текст сразу уходит в генерацию изображения'],
+              ] as const
+            ).map(([value, label, Icon, hint]) => (
+              <button
+                key={value}
+                type="button"
+                role="radio"
+                aria-checked={mode === value}
+                onClick={() => props.onModeChange(value)}
+                title={hint}
+                className={`inline-flex h-8 items-center gap-1.5 rounded-xl px-2.5 text-xs font-medium transition ${focusRing} ${
+                  mode === value
+                    ? 'bg-violet-600 text-white shadow-sm'
+                    : 'text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100'
+                }`}
+              >
+                <Icon className="size-3.5" aria-hidden="true" />
+                <span className="hidden sm:inline">{label}</span>
+                <span className="sr-only sm:hidden">{label}</span>
+              </button>
+            ))}
+          </div>
+          {direct && (
           <button
             type="button"
             onClick={() => setOptionsOpen((v) => !v)}
@@ -216,30 +254,19 @@ export function Composer(props: ComposerProps) {
             <span className="truncate">{summary}</span>
             <ChevronDown className={`size-4 shrink-0 transition ${optionsOpen ? 'rotate-180' : ''}`} aria-hidden="true" />
           </button>
+          )}
 
           <div className="ml-auto flex items-center gap-2">
-            {busy && <span className="text-sm text-zinc-500 tabular-nums dark:text-zinc-400">{props.elapsed} с</span>}
-            {busy ? (
-              <button
-                type="button"
-                onClick={props.onCancel}
-                className={`inline-flex h-10 items-center gap-2 rounded-2xl bg-zinc-900 px-4 text-sm font-medium text-white transition hover:bg-zinc-700 active:scale-95 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300 ${focusRing}`}
-              >
-                <Square className="size-3.5 fill-current" aria-hidden="true" />
-                Отмена
-              </button>
-            ) : (
               <button
                 type="button"
                 onClick={props.onSend}
                 disabled={!canSend}
                 className={`inline-flex size-10 items-center justify-center rounded-2xl bg-violet-600 text-white shadow-lg shadow-violet-600/25 transition hover:bg-violet-500 active:scale-95 disabled:cursor-not-allowed disabled:bg-zinc-300 disabled:shadow-none dark:disabled:bg-zinc-700 ${focusRing}`}
-                aria-label={base ? `Изменить v${base.version ?? 1}` : 'Создать изображение'}
-                title={base ? 'Изменить' : 'Создать'}
+                aria-label={direct ? (base ? `Изменить ${imageLabel(base)}` : 'Создать изображение') : 'Отправить агенту'}
+                title={direct ? (base ? 'Изменить' : 'Создать') : 'Отправить'}
               >
                 <ArrowUp className="size-5" aria-hidden="true" />
               </button>
-            )}
           </div>
         </div>
       </div>

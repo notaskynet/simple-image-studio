@@ -1,4 +1,4 @@
-import type { Theme } from '../types'
+import type { ComposeMode, Theme } from '../types'
 
 const KEYS = {
   baseUrl: 'lumo.baseUrl',
@@ -8,6 +8,10 @@ const KEYS = {
   draft: 'lumo.draft',
   session: 'lumo.session',
   sidebar: 'lumo.sidebar',
+  chatModel: 'lumo.chatModel',
+  systemPrompt: 'lumo.systemPrompt',
+  vision: 'lumo.vision',
+  mode: 'lumo.mode',
 } as const
 
 type SettingKey = keyof typeof KEYS
@@ -45,6 +49,14 @@ export const settings = {
   setSessionId: (value: string | null): void => write('session', value),
   getSidebarOpen: (): boolean => read('sidebar') !== 'closed',
   setSidebarOpen: (value: boolean): void => write('sidebar', value ? null : 'closed'),
+  getChatModel: (): string | null => read('chatModel'),
+  setChatModel: (value: string | null): void => write('chatModel', value),
+  getSystemPrompt: (): string | null => read('systemPrompt'),
+  setSystemPrompt: (value: string | null): void => write('systemPrompt', value),
+  getVision: (): boolean => read('vision') === 'on',
+  setVision: (value: boolean): void => write('vision', value ? 'on' : null),
+  getMode: (): ComposeMode => (read('mode') === 'direct' ? 'direct' : 'agent'),
+  setMode: (value: ComposeMode): void => write('mode', value === 'agent' ? null : value),
   getDraft: (): string => read('draft') ?? '',
   setDraft: (value: string): void => write('draft', value),
 }
