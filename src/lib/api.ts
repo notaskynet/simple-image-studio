@@ -1,6 +1,7 @@
 import type { ImageSize } from '../types'
 
 const GENERATIONS_PATH = '/images/generations'
+const EDITS_PATH = '/images/edits'
 
 export interface GeneratedImage {
   blob?: Blob
@@ -14,6 +15,7 @@ export interface GenerateParams {
   prompt: string
   size: ImageSize
   count: number
+  images?: Blob[]
   signal: AbortSignal
 }
 
@@ -49,9 +51,32 @@ export function normalizeBaseUrl(value: string): string | null {
   return trimmed
 }
 
-function resolveEndpoint(baseUrl: string): string {
-  const base = baseUrl.trim().replace(/\/+$/, '')
-  return base.endsWith(GENERATIONS_PATH) ? base : `${base}${GENERATIONS_PATH}`
+function resolveEndpoint(baseUrl: string, edit: boolean): string {
+  let base = baseUrl.trim().replace(/\/+$/, '')
+  if (base.endsWith(GENERATIONS_PATH)) base = base.slice(0, -GENERATIONS_PATH.length)
+  else if (base.endsWith(EDITS_PATH)) base = base.slice(0, -EDITS_PATH.length)
+  return `${base}${edit ? EDITS_PATH : GENERATIONS_PATH}`
+}
+
+const EXTENSIONS: Record<string, string> = { 'image/jpeg': 'jpg', 'image/webp': 'webp' }
+
+function buildBody(params: GenerateParams, n: number): { body: BodyInit; json: boolean } {
+  if (!params.images || params.images.length === 0) {
+    return {
+      body: JSON.stringify({ model: params.model, prompt: params.prompt, size: params.size, n }),
+      json: true,
+    }
+  }
+  const form = new FormData()
+  form.append('model', params.model)
+  form.append('prompt', params.prompt)
+  form.append('size', params.size)
+  form.append('n', String(n))
+  const field = params.images.length > 1 ? 'image[]' : 'image'
+  params.images.forEach((blob, i) => {
+    form.append(field, blob, `image-${i + 1}.${EXTENSIONS[blob.type] ?? 'png'}`)
+  })
+  return { body: form, json: false }
 }
 
 const BALANCE_PATTERN = /insufficient|balance|quota|credit|funds|баланс|средств/i
@@ -98,15 +123,16 @@ async function urlToImage(url: string, signal: AbortSignal): Promise<GeneratedIm
 }
 
 async function requestImages(params: GenerateParams, n: number): Promise<GeneratedImage[]> {
+  const edit = !!params.images && params.images.length > 0
+  const { body: requestBody, json } = buildBody(params, n)
+  const headers: Record<string, string> = { Authorization: `Bearer ${params.apiKey}` }
+  if (json) headers['Content-Type'] = 'application/json'
   let response: Response
   try {
-    response = await fetch(resolveEndpoint(params.baseUrl), {
+    response = await fetch(resolveEndpoint(params.baseUrl, edit), {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${params.apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ model: params.model, prompt: params.prompt, size: params.size, n }),
+      headers,
+      body: requestBody,
       signal: params.signal,
     })
   } catch (error) {
@@ -122,6 +148,9 @@ async function requestImages(params: GenerateParams, n: number): Promise<Generat
   }
 
   if (!response.ok) {
+    if (edit && (response.status === 404 || response.status === 405)) {
+      throw new ApiError('API не поддерживает доработку изображений (/images/edits)', response.status)
+    }
     throw new ApiError(toUserMessage(response.status, extractMessage(body), params.model), response.status)
   }
 
@@ -153,9 +182,13 @@ function isNotSupportedN(error: unknown): boolean {
 
 const singleImageModels = new Set<string>()
 
+function modelKey(params: GenerateParams): string {
+  return `${params.images?.length ? 'edit' : 'gen'}:${params.model}`
+}
+
 export async function generateImages(params: GenerateParams): Promise<GeneratedImage[]> {
   if (params.count <= 1) return requestImages(params, 1)
-  if (singleImageModels.has(params.model)) return requestParallel(params, params.count)
+  if (singleImageModels.has(modelKey(params))) return requestParallel(params, params.count)
 
   let images: GeneratedImage[]
   try {
@@ -163,7 +196,7 @@ export async function generateImages(params: GenerateParams): Promise<GeneratedI
   } catch (error) {
     if (!isNotSupportedN(error)) throw error
     const result = await requestParallel(params, params.count)
-    singleImageModels.add(params.model)
+    singleImageModels.add(modelKey(params))
     return result
   }
 
