@@ -7,6 +7,7 @@ const KEYS = {
   theme: 'lumo.theme',
   draft: 'lumo.draft',
   session: 'lumo.session',
+  sidebar: 'lumo.sidebar',
 } as const
 
 type SettingKey = keyof typeof KEYS
@@ -42,6 +43,8 @@ export const settings = {
   setTheme: (value: Theme): void => write('theme', value),
   getSessionId: (): string | null => read('session'),
   setSessionId: (value: string | null): void => write('session', value),
+  getSidebarOpen: (): boolean => read('sidebar') !== 'closed',
+  setSidebarOpen: (value: boolean): void => write('sidebar', value ? null : 'closed'),
   getDraft: (): string => read('draft') ?? '',
   setDraft: (value: string): void => write('draft', value),
 }

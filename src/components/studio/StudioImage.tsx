@@ -1,4 +1,4 @@
-import { Copy, Download, ImageOff, Star, Trash2, Wand } from 'lucide-react'
+import { Copy, Download, ImageOff, PencilLine, Star, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 
 import { useImageUrl } from '../../hooks/useImageUrl'
@@ -61,6 +61,12 @@ export function StudioImage({ meta, parent, pinned, actions }: StudioImageProps)
             className={`absolute inset-0 size-full object-cover ${loaded ? 'animate-fade-in' : 'opacity-0'}`}
           />
         )}
+        {pinned && (
+          <span className="absolute top-3 right-3 inline-flex items-center gap-1.5 rounded-full bg-violet-600 px-2.5 py-1 text-xs font-medium text-white shadow-lg">
+            <PencilLine className="size-3.5" aria-hidden="true" />
+            Редактируется
+          </span>
+        )}
         <span className="absolute top-3 left-3 flex items-center gap-1.5">
           <span className="rounded-full bg-zinc-950/70 px-2.5 py-1 text-xs font-semibold text-white backdrop-blur">
             v{meta.version ?? 1}
@@ -73,19 +79,19 @@ export function StudioImage({ meta, parent, pinned, actions }: StudioImageProps)
         </span>
       </button>
       <figcaption className="flex items-center gap-0.5 p-2" role="toolbar" aria-label={`Действия с v${meta.version ?? 1}`}>
-        <button
-          type="button"
-          onClick={() => actions.onRefine(meta)}
-          className={`mr-1 inline-flex h-8 items-center gap-1.5 rounded-xl px-3 text-sm font-medium transition active:scale-95 ${focusRing} ${
-            pinned
-              ? 'bg-violet-600 text-white'
-              : 'bg-violet-50 text-violet-700 hover:bg-violet-100 dark:bg-violet-500/10 dark:text-violet-300 dark:hover:bg-violet-500/20'
-          }`}
-          aria-pressed={pinned}
-        >
-          <Wand className="size-4" aria-hidden="true" />
-          {pinned ? 'Дорабатываем' : 'Доработать'}
-        </button>
+        {pinned ? (
+          <span className="mr-1 px-2 text-xs text-violet-600 dark:text-violet-400">Опишите правку в поле ниже</span>
+        ) : (
+          <button
+            type="button"
+            onClick={() => actions.onRefine(meta)}
+            className={`mr-1 inline-flex h-8 items-center gap-1.5 rounded-xl px-3 text-sm font-medium text-violet-700 transition hover:bg-violet-50 active:scale-95 dark:text-violet-300 dark:hover:bg-violet-500/10 ${focusRing}`}
+          >
+            <PencilLine className="size-4" aria-hidden="true" />
+            Изменить
+          </button>
+        )}
+        <span className="flex-1" />
         <button
           type="button"
           className={tool}
@@ -110,7 +116,7 @@ export function StudioImage({ meta, parent, pinned, actions }: StudioImageProps)
         </button>
         <button
           type="button"
-          className={`${tool} ml-auto hover:text-rose-600! dark:hover:text-rose-400!`}
+          className={`${tool} hover:text-rose-600! dark:hover:text-rose-400!`}
           onClick={() => actions.onDelete(meta)}
           aria-label="Удалить"
           title="Удалить"
