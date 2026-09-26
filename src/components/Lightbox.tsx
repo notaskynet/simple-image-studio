@@ -1,7 +1,8 @@
-import { ChevronLeft, ChevronRight, Download, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Columns2, Download, Wand, X } from 'lucide-react'
 import { useEffect, useRef, useState, type TouchEvent } from 'react'
 
 import { useImageUrl } from '../hooks/useImageUrl'
+import { formatBySize } from '../lib/presets'
 import type { GenerationMeta } from '../types'
 import { focusRing } from './ui'
 
@@ -11,6 +12,8 @@ interface LightboxProps {
   onIndexChange: (index: number) => void
   onClose: () => void
   onDownload: (meta: GenerationMeta) => void
+  getParent?: (meta: GenerationMeta) => GenerationMeta | undefined
+  onRefine?: (meta: GenerationMeta) => void
 }
 
 const controlButton = `inline-flex size-11 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur transition hover:bg-white/20 active:scale-95 disabled:pointer-events-none disabled:opacity-30 ${focusRing}`
@@ -29,11 +32,60 @@ function LightboxImage({ meta }: { meta: GenerationMeta }) {
   )
 }
 
-export function Lightbox({ items, index, onIndexChange, onClose, onDownload }: LightboxProps) {
+function CompareView({ before, after }: { before: GenerationMeta; after: GenerationMeta }) {
+  const beforeUrl = useImageUrl(before, true)
+  const afterUrl = useImageUrl(after, true)
+  const [position, setPosition] = useState(50)
+  const format = formatBySize(after.size)
+  const ratio = format.width / format.height
+
+  return (
+    <div className="flex size-full items-center justify-center" style={{ containerType: 'size' }}>
+      <div
+        className="relative overflow-hidden rounded-xl select-none"
+        style={{ width: `min(100cqw, calc(100cqh * ${ratio}))`, aspectRatio: `${format.width} / ${format.height}` }}
+        onTouchStart={(e) => e.stopPropagation()}
+        onTouchEnd={(e) => e.stopPropagation()}
+      >
+        {beforeUrl && <img src={beforeUrl} alt={`До: v${before.version ?? 1}`} className="absolute inset-0 size-full object-contain" draggable={false} />}
+        {afterUrl && (
+          <img
+            src={afterUrl}
+            alt={`После: v${after.version ?? 1}`}
+            className="absolute inset-0 size-full object-contain"
+            style={{ clipPath: `inset(0 0 0 ${position}%)` }}
+            draggable={false}
+          />
+        )}
+        <div className="pointer-events-none absolute inset-y-0 w-0.5 bg-white shadow-[0_0_8px_rgba(0,0,0,0.6)]" style={{ left: `${position}%` }} aria-hidden="true" />
+        <span className="pointer-events-none absolute top-3 left-3 rounded-full bg-zinc-950/70 px-2.5 py-1 text-xs font-semibold">
+          v{before.version ?? 1}
+        </span>
+        <span className="pointer-events-none absolute top-3 right-3 rounded-full bg-violet-600/90 px-2.5 py-1 text-xs font-semibold">
+          v{after.version ?? 1}
+        </span>
+        <input
+          type="range"
+          min={0}
+          max={100}
+          value={position}
+          onChange={(e) => setPosition(Number(e.target.value))}
+          className="absolute inset-0 size-full cursor-ew-resize opacity-0"
+          aria-label={`Сравнение: v${before.version ?? 1} и v${after.version ?? 1}`}
+        />
+      </div>
+    </div>
+  )
+}
+
+export function Lightbox({ items, index, onIndexChange, onClose, onDownload, getParent, onRefine }: LightboxProps) {
   const closeRef = useRef<HTMLButtonElement>(null)
   const touchStart = useRef<{ x: number; y: number } | null>(null)
   const [showPrompt, setShowPrompt] = useState(true)
+  const [compareId, setCompareId] = useState<string | null>(null)
   const meta = items[index]
+  const parent = meta && getParent ? getParent(meta) : undefined
+  const comparing = !!parent && compareId === meta?.id
   const hasPrev = index > 0
   const hasNext = index < items.length - 1
 
@@ -103,6 +155,32 @@ export function Lightbox({ items, index, onIndexChange, onClose, onDownload }: L
           {index + 1} / {items.length}
         </span>
         <div className="flex items-center gap-2">
+          {parent && (
+            <button
+              type="button"
+              className={`${controlButton} ${comparing ? 'bg-violet-600! hover:bg-violet-500!' : ''}`}
+              onClick={() => setCompareId(comparing ? null : meta.id)}
+              aria-pressed={comparing}
+              aria-label={`Сравнить с v${parent.version ?? 1}`}
+              title={`Сравнить с v${parent.version ?? 1}`}
+            >
+              <Columns2 className="size-5" aria-hidden="true" />
+            </button>
+          )}
+          {onRefine && (
+            <button
+              type="button"
+              className={controlButton}
+              onClick={() => {
+                onRefine(meta)
+                onClose()
+              }}
+              aria-label="Доработать"
+              title="Доработать"
+            >
+              <Wand className="size-5" aria-hidden="true" />
+            </button>
+          )}
           <button type="button" className={controlButton} onClick={() => onDownload(meta)} aria-label="Скачать">
             <Download className="size-5" aria-hidden="true" />
           </button>
@@ -118,7 +196,11 @@ export function Lightbox({ items, index, onIndexChange, onClose, onDownload }: L
           if (e.target === e.currentTarget) onClose()
         }}
       >
-        <LightboxImage key={meta.id} meta={meta} />
+        {comparing && parent ? (
+          <CompareView key={meta.id} before={parent} after={meta} />
+        ) : (
+          <LightboxImage key={meta.id} meta={meta} />
+        )}
         <button
           type="button"
           className={`${controlButton} absolute left-4 top-1/2 hidden -translate-y-1/2 sm:inline-flex`}

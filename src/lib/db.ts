@@ -1,9 +1,10 @@
 import { clear, createStore, del, get, set, values } from 'idb-keyval'
 
-import type { GenerationMeta } from '../types'
+import type { GenerationMeta, Session } from '../types'
 
 const metaStore = createStore('aitunnel-history', 'meta')
 const imageStore = createStore('aitunnel-images', 'images')
+const sessionStore = createStore('studio-sessions', 'sessions')
 
 const urlCache = new Map<string, string>()
 
@@ -36,7 +37,7 @@ export async function deleteGeneration(id: string): Promise<void> {
 }
 
 export async function clearHistory(): Promise<void> {
-  await Promise.all([clear(metaStore), clear(imageStore)])
+  await Promise.all([clear(metaStore), clear(imageStore), clear(sessionStore)])
   for (const id of [...urlCache.keys()]) revoke(id)
 }
 
@@ -61,4 +62,18 @@ export async function getImageUrl(meta: GenerationMeta): Promise<string | null> 
 
 export function peekImageUrl(meta: GenerationMeta): string | null {
   return urlCache.get(meta.id) ?? null
+}
+
+export async function loadSessions(): Promise<Session[]> {
+  const items = await values<Session>(sessionStore)
+  return items.sort((a, b) => b.updatedAt - a.updatedAt)
+}
+
+export async function saveSession(session: Session): Promise<void> {
+  await set(session.id, session, sessionStore)
+}
+
+export async function deleteSession(session: Session, imageIds: string[]): Promise<void> {
+  await del(session.id, sessionStore)
+  await Promise.all(imageIds.map((id) => deleteGeneration(id)))
 }
