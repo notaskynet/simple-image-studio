@@ -175,8 +175,8 @@ export function Lightbox({ items, index, onIndexChange, onClose, onDownload, get
                 onRefine(meta)
                 onClose()
               }}
-              aria-label="Доработать"
-              title="Доработать"
+              aria-label="Изменить"
+              title="Изменить"
             >
               <Wand className="size-5" aria-hidden="true" />
             </button>

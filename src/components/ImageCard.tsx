@@ -138,8 +138,8 @@ export function ImageCard({ meta, actions, busy }: ImageCardProps) {
             type="button"
             className={actionButton}
             onClick={() => actions.onRefine(meta)}
-            aria-label="Доработать в Студии"
-            title="Доработать"
+            aria-label="Изменить в Студии"
+            title="Изменить"
           >
             <Wand className="size-4" aria-hidden="true" />
           </button>
