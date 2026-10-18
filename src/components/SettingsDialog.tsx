@@ -56,6 +56,7 @@ export function SettingsDialog({
   const [, refresh] = useState(0)
 
   const normalizedUrl = normalizeBaseUrl(urlValue)
+  const dirty = urlValue.trim() !== baseUrl || keyValue.trim() !== apiKey
   const profile = getProfile(profileModel)
   const disabled = getDisabled(profileModel)
   const hasOverrides = Object.keys(getOverrides(profileModel)).length > 0
@@ -112,11 +113,13 @@ export function SettingsDialog({
             <LanguageToggle />
           </div>
 
-          <div className="flex justify-end">
-            <Button type="submit" disabled={!normalizedUrl || !keyValue.trim()}>
-              {t('common.save')}
-            </Button>
-          </div>
+          {dirty && (
+            <div className="flex justify-end">
+              <Button type="submit" disabled={!normalizedUrl || !keyValue.trim()}>
+                {t('common.save')}
+              </Button>
+            </div>
+          )}
         </form>
 
         <section className="space-y-4 border-t pt-5">

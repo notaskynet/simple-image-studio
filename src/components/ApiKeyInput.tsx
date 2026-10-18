@@ -27,6 +27,11 @@ export function ApiKeyInput({ id, value, onChange, autoFocus }: ApiKeyInputProps
         autoComplete="off"
         spellCheck={false}
         autoFocus={autoFocus}
+        // API-ключ — не пароль от аккаунта: просим менеджеры паролей не предлагать его сохранить.
+        data-bwignore
+        data-1p-ignore
+        data-lpignore="true"
+        data-form-type="other"
         className="pr-10 font-mono"
       />
       <Button
