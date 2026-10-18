@@ -7,8 +7,10 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { useI18n, type Key } from '@/i18n'
 import { normalizeBaseUrl } from '@/lib/api'
+import { settings } from '@/lib/settings'
 import {
   enableParam,
   getDisabled,
@@ -54,6 +56,7 @@ export function SettingsDialog({
   const [keyValue, setKeyValue] = useState(apiKey)
   const [profileModel, setProfileModel] = useState(model)
   const [, refresh] = useState(0)
+  const [loader, setLoader] = useState(settings.getLoader)
 
   const normalizedUrl = normalizeBaseUrl(urlValue)
   const dirty = urlValue.trim() !== baseUrl || keyValue.trim() !== apiKey
@@ -111,6 +114,25 @@ export function SettingsDialog({
           <div className="space-y-2">
             <Label>{t('common.language')}</Label>
             <LanguageToggle />
+          </div>
+
+          <div className="space-y-2">
+            <Label>{t('settings.loader')}</Label>
+            <ToggleGroup
+              variant="outline"
+              size="sm"
+              value={[loader]}
+              onValueChange={(value) => {
+                const next = value[0]
+                if (next === 'gradient' || next === 'snake') {
+                  settings.setLoader(next)
+                  setLoader(next)
+                }
+              }}
+            >
+              <ToggleGroupItem value="gradient">{t('settings.loader.gradient')}</ToggleGroupItem>
+              <ToggleGroupItem value="snake">{t('settings.loader.snake')}</ToggleGroupItem>
+            </ToggleGroup>
           </div>
 
           {dirty && (

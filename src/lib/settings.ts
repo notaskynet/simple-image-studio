@@ -12,6 +12,7 @@ const KEYS = {
   disabled: 'lumo.disabled',
   migrated: 'lumo.migrated',
   modelList: 'lumo.modelList',
+  loader: 'lumo.loader',
 } as const
 
 type SettingKey = keyof typeof KEYS
@@ -71,6 +72,8 @@ export const settings = {
   getModelList: (): { at: number; source: string; models: string[] } | null => readJson<{ at: number; source: string; models: string[] } | null>('modelList', null),
   setModelList: (value: { at: number; source: string; models: string[] } | null): void =>
     write('modelList', value ? JSON.stringify(value) : null),
+  getLoader: (): 'gradient' | 'snake' => (read('loader') === 'snake' ? 'snake' : 'gradient'),
+  setLoader: (value: 'gradient' | 'snake'): void => write('loader', value === 'gradient' ? null : value),
   isMigrated: (): boolean => read('migrated') === '1',
   setMigrated: (): void => write('migrated', '1'),
 }

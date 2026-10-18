@@ -28,6 +28,8 @@ import { useT, describeCode } from '@/i18n'
 import { sizeLabelParts, type ModelProfile } from '@/lib/models'
 import { cn } from '@/lib/utils'
 import type { Version } from '@/types'
+import { settings } from '@/lib/settings'
+import { GradientLoader } from './GradientLoader'
 import { SnakeLoader } from './SnakeLoader'
 import { MaskLayer, type MaskHandle, type MaskState, type MaskTool } from './MaskLayer'
 
@@ -204,7 +206,11 @@ function VersionView({ version, parent, profile, editable, maskRef, onCancel, on
     return (
       <div className="flex min-h-0 flex-1 items-center justify-center p-4" style={{ containerType: 'size' }}>
         <div className="relative overflow-hidden rounded-lg" style={frameStyle(ratio)}>
-          <SnakeLoader className="absolute inset-0 size-full" />
+          {settings.getLoader() === 'snake' ? (
+            <SnakeLoader className="absolute inset-0 size-full" />
+          ) : (
+            <GradientLoader className="absolute inset-0 size-full" />
+          )}
           <div className="absolute inset-x-0 bottom-0 flex flex-col items-center gap-2 p-3">
             <span className="rounded-full bg-background/80 px-3 py-1 text-sm tabular-nums">
               {t('canvas.loading')} {elapsed}s
