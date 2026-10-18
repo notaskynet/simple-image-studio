@@ -65,6 +65,14 @@ const FIT: View = { scale: 1, x: 0, y: 0 }
 
 type Tool = MaskTool | 'hand'
 
+function prettyJson(raw: string): string {
+  try {
+    return JSON.stringify(JSON.parse(raw), null, 2)
+  } catch {
+    return raw
+  }
+}
+
 function ratioOf(version: Version, natural: Natural | null): number {
   if (natural) return natural.width / natural.height
   const parts = sizeLabelParts(version.recipe.size)
@@ -193,6 +201,18 @@ function VersionView({ version, parent, profile, editable, maskRef, onCancel, on
             {version.error ? describeCode(t, version.error.code, version.error.detail) : t('error.unknown')}
           </p>
         </div>
+        {version.error?.raw && (
+          <details className="w-full max-w-xl text-left">
+            <summary className="cursor-pointer text-center text-xs text-muted-foreground">
+              {t('canvas.errorDetails')}
+              {version.error.status ? ` · HTTP ${version.error.status}` : ''}
+            </summary>
+            <pre className="mt-2 max-h-64 overflow-auto rounded-lg bg-muted p-3 text-xs leading-relaxed break-words whitespace-pre-wrap select-text">
+              {version.sent ? `POST /images/${version.sent.endpoint}\n\n` : ''}
+              {prettyJson(version.error.raw)}
+            </pre>
+          </details>
+        )}
         <Button variant="outline" onClick={() => onRetry(version)}>
           <RotateCcw aria-hidden="true" />
           {t('common.retry')}

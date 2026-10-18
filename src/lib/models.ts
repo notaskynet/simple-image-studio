@@ -5,7 +5,7 @@ export type MaskSupport = 'native' | 'visual' | 'none'
 export interface ModelProfile {
   sizes: string[]
   quality: string[]
-  /** Модель принимает n > 1 в одном запросе. Иначе варианты создаются параллельными запросами. */
+  /** Модель принимает n > 1 в одном запросе. По умолчанию выключено: варианты создаются параллельными запросами. */
   n: boolean
   background: boolean
   negative: boolean
@@ -41,7 +41,7 @@ const BUILTIN: BuiltinProfile[] = [
     profile: {
       sizes: ['auto', ...SQUARE_SIZES],
       quality: ['low', 'medium', 'high'],
-      n: true,
+      n: false,
       background: true,
       negative: false,
       mask: 'native',
@@ -54,7 +54,7 @@ const BUILTIN: BuiltinProfile[] = [
     profile: {
       sizes: ['auto', ...SQUARE_SIZES],
       quality: ['low', 'medium', 'high'],
-      n: true,
+      n: false,
       background: false,
       negative: false,
       mask: 'native',
@@ -75,7 +75,7 @@ const BUILTIN: BuiltinProfile[] = [
     profile: {
       ...MINIMAL,
       sizes: ['512x512', '768x768', ...SQUARE_SIZES],
-      n: true,
+      n: false,
       negative: true,
       mask: 'native',
       maxRefs: 2,
@@ -134,8 +134,8 @@ export function rememberModel(model: string): void {
   settings.setModelHistory([value, ...history].slice(0, 12))
 }
 
-export function modelSuggestions(): string[] {
-  const set = new Set<string>([DEFAULT_MODEL, ...settings.getModelHistory()])
+export function modelSuggestions(remote: string[] = []): string[] {
+  const set = new Set<string>([DEFAULT_MODEL, ...settings.getModelHistory(), ...remote])
   return [...set]
 }
 

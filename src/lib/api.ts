@@ -93,6 +93,7 @@ function buildBody(params: GenerateParams, n: number): { body: BodyInit; json: b
   return { body: form, json: false }
 }
 
+const MAX_RAW = 4000
 const BALANCE_PATTERN = /insufficient|balance|quota|credit|funds|баланс|средств/i
 const MODEL_PATTERN = /model|модел/i
 const REJECTABLE = ['quality', 'background', 'negative_prompt', 'input_fidelity', 'mask'] as const
@@ -110,18 +111,18 @@ export function findRejectedParam(message: string | null): string | null {
   return REJECTABLE.find((name) => lower.includes(name)) ?? null
 }
 
-function classify(status: number, message: string | null): AppError {
-  if (status === 401) return new AppError('invalid_key', { status })
-  if (status === 402 || (message && BALANCE_PATTERN.test(message))) return new AppError('no_balance', { status })
+function classify(status: number, message: string | null, raw: string): AppError {
+  if (status === 401) return new AppError('invalid_key', { status, raw })
+  if (status === 402 || (message && BALANCE_PATTERN.test(message))) return new AppError('no_balance', { status, raw })
   if (status === 400 || status === 422) {
     const param = findRejectedParam(message)
-    if (param === 'mask') return new AppError('mask_unsupported', { status, detail: message, param })
-    if (param) return new AppError('param_rejected', { status, detail: message, param })
+    if (param === 'mask') return new AppError('mask_unsupported', { status, detail: message, param, raw })
+    if (param) return new AppError('param_rejected', { status, detail: message, param, raw })
   }
   if (status === 404 || (status === 400 && message && MODEL_PATTERN.test(message))) {
-    return new AppError('model_unavailable', { status, detail: message })
+    return new AppError('model_unavailable', { status, detail: message, raw })
   }
-  return new AppError('http', { status, detail: message ?? `HTTP ${status}` })
+  return new AppError('http', { status, detail: message ?? `HTTP ${status}`, raw })
 }
 
 function detectMime(bytes: Uint8Array): string {
@@ -167,18 +168,27 @@ async function requestImages(params: GenerateParams, n: number): Promise<Generat
     throw new AppError('network')
   }
 
-  let body: ApiResponse | null = null
+  let text = ''
   try {
-    body = (await response.json()) as ApiResponse
+    text = await response.text()
   } catch (error) {
     if (params.signal.aborted) throw error
   }
+  let body: ApiResponse | null = null
+  try {
+    body = JSON.parse(text) as ApiResponse
+  } catch {
+    body = null
+  }
+  const raw = text.slice(0, MAX_RAW)
 
   if (!response.ok) {
-    if (edit && (response.status === 404 || response.status === 405)) {
-      throw new AppError('edits_unsupported', { status: response.status })
+    const message = extractMessage(body)
+    // 404 с упоминанием модели — это не «правка не поддерживается», а неверная модель: покажет classify().
+    if (edit && (response.status === 404 || response.status === 405) && !(message && MODEL_PATTERN.test(message))) {
+      throw new AppError('edits_unsupported', { status: response.status, detail: message, raw })
     }
-    throw classify(response.status, extractMessage(body))
+    throw classify(response.status, message, raw)
   }
 
   const items = body?.data ?? []
@@ -192,7 +202,7 @@ async function requestImages(params: GenerateParams, n: number): Promise<Generat
   const result = images.filter((image): image is GeneratedImage => image !== null)
   if (result.length === 0) {
     const message = extractMessage(body)
-    throw message ? new AppError('http', { detail: message }) : new AppError('empty')
+    throw message ? new AppError('http', { detail: message, raw }) : new AppError('empty', { raw })
   }
   return result
 }

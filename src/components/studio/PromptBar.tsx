@@ -41,7 +41,7 @@ export function PromptBar({ value, onChange, base, onResetBase, onSubmit, onPast
           )}
           <span className="ml-auto hidden sm:inline">{t('prompt.hint')}</span>
         </div>
-        <div className="flex items-end gap-2">
+        <div className="flex items-end gap-2 rounded-xl border bg-background p-2 transition-shadow focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50 dark:bg-input/30">
           <Textarea
             value={value}
             onChange={(e) => onChange(e.target.value)}
@@ -55,7 +55,7 @@ export function PromptBar({ value, onChange, base, onResetBase, onSubmit, onPast
             }}
             placeholder={base ? t('prompt.placeholder.edit') : t('prompt.placeholder.new')}
             rows={2}
-            className="max-h-40 min-h-16 flex-1 resize-none"
+            className="max-h-40 min-h-12 flex-1 resize-none border-0 bg-transparent px-1.5 py-1 shadow-none ring-0 focus-visible:border-0 focus-visible:ring-0 dark:bg-transparent"
           />
           <Button
             size="icon-lg"

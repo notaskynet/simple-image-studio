@@ -1,5 +1,5 @@
 import { FolderOpen, Layers, Moon, Settings, SlidersHorizontal, Sun } from 'lucide-react'
-import { useCallback, useMemo, useRef, useState, type DragEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
 
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { LanguageToggle } from '@/components/LanguageToggle'
@@ -12,6 +12,7 @@ import { describeError, useT } from '@/i18n'
 import { getImageBlob } from '@/lib/db'
 import { buildFileName, copyImageToClipboard, copyText, downloadBlob, prepareUpload } from '@/lib/image'
 import { DEFAULT_MODEL, getProfile } from '@/lib/models'
+import { fetchModels } from '@/lib/modelList'
 import { notify } from '@/lib/notify'
 import { settings } from '@/lib/settings'
 import type { Project, Recipe, Theme, Version } from '@/types'
@@ -53,6 +54,11 @@ export function StudioView({ baseUrl, apiKey, theme, profileTick, onToggleTheme,
   const [versionsOpen, setVersionsOpen] = useState(false)
   const [deleting, setDeleting] = useState<Version | null>(null)
   const [rightTab, setRightTab] = useState('versions')
+  const [remoteModels, setRemoteModels] = useState<string[]>(() => {
+    const cached = settings.getModelList()
+    return cached?.source === baseUrl ? cached.models : []
+  })
+  const [refreshingModels, setRefreshingModels] = useState(false)
 
   const importTitle = t('project.import')
   const store = useProject(
@@ -89,6 +95,30 @@ export function StudioView({ baseUrl, apiKey, theme, profileTick, onToggleTheme,
         ? 'medium'
         : (profile.quality[0] ?? draft.quality),
   }
+
+  const refreshModels = useCallback(
+    async (manual: boolean): Promise<void> => {
+      setRefreshingModels(true)
+      try {
+        const result = await fetchModels(baseUrl, apiKey)
+        settings.setModelList({ at: Date.now(), source: baseUrl, models: result.models })
+        setRemoteModels(result.models)
+        if (manual) notify(t('toast.modelsLoaded', { n: result.models.length }), 'success')
+      } catch (error) {
+        if (manual) notify(`${t('toast.modelsFailed')}: ${describeError(t, error)}`, 'error')
+      } finally {
+        setRefreshingModels(false)
+      }
+    },
+    [apiKey, baseUrl, t],
+  )
+
+  // Список моделей обновляется автоматически раз в сутки и при смене адреса или ключа.
+  useEffect(() => {
+    const cached = settings.getModelList()
+    if (cached && cached.source === baseUrl && Date.now() - cached.at < 24 * 60 * 60 * 1000) return
+    void refreshModels(false)
+  }, [baseUrl, refreshModels])
 
   const patchDraft = useCallback((patch: Partial<Draft>) => setDraft((d) => ({ ...d, ...patch })), [])
 
@@ -264,6 +294,9 @@ export function StudioView({ baseUrl, apiKey, theme, profileTick, onToggleTheme,
       onDraftChange={patchDraft}
       profile={profile}
       onAddRefs={(files) => void addRefs(files)}
+      remoteModels={remoteModels}
+      refreshingModels={refreshingModels}
+      onRefreshModels={() => void refreshModels(true)}
     />
   )
 

@@ -4,11 +4,13 @@ export type Theme = 'light' | 'dark'
 
 export type Lang = 'ru' | 'en'
 
-export type RefRole = 'style' | 'subject' | 'character' | 'other'
+export type RefRole = 'style' | 'subject' | 'character' | 'other' | 'custom'
 
 export interface Ref {
   imageId: string
   role: RefRole
+  /** Описание роли для role = 'custom'. */
+  note?: string
 }
 
 export type Background = 'auto' | 'transparent'

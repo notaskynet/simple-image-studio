@@ -20,11 +20,12 @@ interface BuildInput {
   disabled: string[]
 }
 
-const ROLE_LINES: Record<RefRole, (n: number) => string> = {
+const ROLE_LINES: Record<RefRole, (n: number, note?: string) => string> = {
   style: (n) => `Image ${n} is a style reference: match its look and feel, not its content.`,
   subject: (n) => `Image ${n} shows an object to include in the result.`,
   character: (n) => `Image ${n} shows a character; keep their appearance consistent.`,
   other: (n) => `Image ${n} is an additional reference.`,
+  custom: (n, note) => (note?.trim() ? `Image ${n}: ${note.trim()}` : `Image ${n} is an additional reference.`),
 }
 
 type MaskKind = 'native' | 'visual'
@@ -32,7 +33,7 @@ type MaskKind = 'native' | 'visual'
 function composePrompt(recipe: Recipe, edit: boolean, mask: MaskKind | undefined): string {
   const text = recipe.prompt.trim()
   const firstRef = edit ? 2 : 1
-  const roles = recipe.refs.map((ref, i) => ROLE_LINES[ref.role](firstRef + i))
+  const roles = recipe.refs.map((ref, i) => ROLE_LINES[ref.role](firstRef + i, ref.note))
   const refBlock = roles.length > 0 ? `\n\n${roles.join('\n')}` : ''
 
   if (!edit) return `${text}${refBlock}`

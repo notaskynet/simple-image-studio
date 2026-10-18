@@ -1,7 +1,8 @@
-import { Check, Pencil, Plus, Search, Trash2 } from 'lucide-react'
+import { Check, ImageIcon, Pencil, Plus, Search, Trash2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 
 import { ConfirmDialog } from '@/components/ConfirmDialog'
+import { Thumb } from '@/components/Thumb'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -20,6 +21,11 @@ interface ProjectsDialogProps {
   onClose: () => void
 }
 
+interface Summary {
+  count: number
+  cover: Version | undefined
+}
+
 export function ProjectsDialog({ projects, versions, currentId, onSelect, onCreate, onRename, onDelete, onClose }: ProjectsDialogProps) {
   const t = useT()
   const [query, setQuery] = useState('')
@@ -27,9 +33,15 @@ export function ProjectsDialog({ projects, versions, currentId, onSelect, onCrea
   const [title, setTitle] = useState('')
   const [deleting, setDeleting] = useState<Project | null>(null)
 
-  const counts = useMemo(() => {
-    const map = new Map<string, number>()
-    for (const v of versions) map.set(v.projectId, (map.get(v.projectId) ?? 0) + 1)
+  const summaries = useMemo(() => {
+    const map = new Map<string, Summary>()
+    for (const v of versions) {
+      const current = map.get(v.projectId) ?? { count: 0, cover: undefined }
+      current.count += 1
+      const hasImage = v.status === 'done' && (v.imageId || v.remoteUrl)
+      if (hasImage && (!current.cover || v.createdAt > current.cover.createdAt)) current.cover = v
+      map.set(v.projectId, current)
+    }
     return map
   }, [versions])
 
@@ -50,37 +62,68 @@ export function ProjectsDialog({ projects, versions, currentId, onSelect, onCrea
   return (
     <>
       <Dialog open onOpenChange={(open) => !open && onClose()}>
-        <DialogContent className="max-h-[85dvh] sm:max-w-md">
+        <DialogContent className="max-h-[88dvh] overflow-y-auto sm:max-w-3xl">
           <DialogHeader>
             <DialogTitle>{t('project.menu')}</DialogTitle>
           </DialogHeader>
-          <div className="flex gap-2">
-            <div className="relative flex-1">
-              <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-              <Input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder={t('project.search')}
-                aria-label={t('project.search')}
-                className="pl-8"
-              />
-            </div>
-            <Button onClick={onCreate}>
-              <Plus aria-hidden="true" />
-              {t('project.new')}
-            </Button>
+          <div className="relative">
+            <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+            <Input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder={t('project.search')}
+              aria-label={t('project.search')}
+              className="pl-8"
+            />
           </div>
-          {filtered.length === 0 ? (
-            <p className="py-6 text-center text-sm text-muted-foreground">{t('project.empty')}</p>
-          ) : (
-            <ul className="-mx-1 max-h-[50dvh] space-y-0.5 overflow-y-auto px-1">
-              {filtered.map((project) => (
-                <li
-                  key={project.id}
-                  className={cn('flex items-center gap-1 rounded-lg p-1', project.id === currentId ? 'bg-accent' : 'hover:bg-muted')}
-                >
-                  {editingId === project.id ? (
-                    <>
+
+          <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <li>
+              <button
+                type="button"
+                onClick={onCreate}
+                className="flex aspect-square w-full flex-col items-center justify-center gap-2 rounded-xl border border-dashed text-sm text-muted-foreground transition-colors outline-none hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
+              >
+                <Plus className="size-6" aria-hidden="true" />
+                {t('project.new')}
+              </button>
+            </li>
+            {filtered.map((project) => {
+              const summary = summaries.get(project.id)
+              const editing = editingId === project.id
+              return (
+                <li key={project.id} className="group relative">
+                  <button
+                    type="button"
+                    onClick={() => onSelect(project.id)}
+                    className="block w-full rounded-xl text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+                  >
+                    <span
+                      className={cn(
+                        'relative flex aspect-square items-center justify-center overflow-hidden rounded-xl border bg-muted',
+                        project.id === currentId && 'ring-2 ring-primary',
+                      )}
+                    >
+                      {summary?.cover ? (
+                        <Thumb imageId={summary.cover.imageId} remoteUrl={summary.cover.remoteUrl} className="size-full" />
+                      ) : (
+                        <span className="flex flex-col items-center gap-1 text-xs text-muted-foreground">
+                          <ImageIcon className="size-6" aria-hidden="true" />
+                          {t('project.cover')}
+                        </span>
+                      )}
+                    </span>
+                    {!editing && (
+                      <span className="mt-1.5 block px-0.5">
+                        <span className="block truncate text-sm font-medium">{project.title || t('project.untitled')}</span>
+                        <span className="block text-xs text-muted-foreground">
+                          {t('project.versions', { n: summary?.count ?? 0 })} · {new Date(project.updatedAt).toLocaleDateString()}
+                        </span>
+                      </span>
+                    )}
+                  </button>
+                  {editing && (
+                    <div className="mt-1.5 flex gap-1">
                       <Input
                         value={title}
                         onChange={(e) => setTitle(e.target.value)}
@@ -88,24 +131,15 @@ export function ProjectsDialog({ projects, versions, currentId, onSelect, onCrea
                         autoFocus
                         className="flex-1"
                       />
-                      <Button variant="ghost" size="icon-sm" onClick={commitRename} aria-label={t('common.save')}>
+                      <Button variant="secondary" size="icon" onClick={commitRename} aria-label={t('common.save')}>
                         <Check aria-hidden="true" />
                       </Button>
-                    </>
-                  ) : (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => onSelect(project.id)}
-                        className="min-w-0 flex-1 rounded-md p-1.5 text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-                      >
-                        <span className="block truncate text-sm font-medium">{project.title || t('project.untitled')}</span>
-                        <span className="block text-xs text-muted-foreground">
-                          {t('project.versions', { n: counts.get(project.id) ?? 0 })} · {new Date(project.updatedAt).toLocaleDateString()}
-                        </span>
-                      </button>
+                    </div>
+                  )}
+                  {!editing && (
+                    <div className="absolute top-2 right-2 flex gap-1 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100">
                       <Button
-                        variant="ghost"
+                        variant="secondary"
                         size="icon-sm"
                         onClick={() => {
                           setEditingId(project.id)
@@ -116,14 +150,18 @@ export function ProjectsDialog({ projects, versions, currentId, onSelect, onCrea
                       >
                         <Pencil aria-hidden="true" />
                       </Button>
-                      <Button variant="ghost" size="icon-sm" onClick={() => setDeleting(project)} aria-label={t('project.delete')} title={t('project.delete')}>
+                      <Button variant="secondary" size="icon-sm" onClick={() => setDeleting(project)} aria-label={t('project.delete')} title={t('project.delete')}>
                         <Trash2 aria-hidden="true" />
                       </Button>
-                    </>
+                    </div>
                   )}
                 </li>
-              ))}
-            </ul>
+              )
+            })}
+          </ul>
+
+          {filtered.length === 0 && projects.length > 0 && (
+            <p className="py-2 text-center text-sm text-muted-foreground">{t('project.empty')}</p>
           )}
         </DialogContent>
       </Dialog>

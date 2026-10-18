@@ -1,8 +1,17 @@
-import { ImagePlus, X } from 'lucide-react'
-import { useRef, type ChangeEvent, type DragEvent } from 'react'
+import { ImagePlus, RefreshCw, X } from 'lucide-react'
+import { useRef, useState, type ChangeEvent, type DragEvent } from 'react'
 
+import { ImagePreviewDialog } from '@/components/ImagePreviewDialog'
 import { Thumb } from '@/components/Thumb'
 import { Button } from '@/components/ui/button'
+import {
+  Combobox,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxList,
+} from '@/components/ui/combobox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -21,15 +30,22 @@ interface ParamsPanelProps {
   onDraftChange: (patch: Partial<Draft>) => void
   profile: ModelProfile
   onAddRefs: (files: File[]) => void
+  remoteModels: string[]
+  refreshingModels: boolean
+  onRefreshModels: () => void
 }
 
-const ROLES: RefRole[] = ['style', 'subject', 'character', 'other']
+const ROLES: RefRole[] = ['style', 'subject', 'character', 'other', 'custom']
 const COUNTS = [1, 2, 3, 4]
 
-export function ParamsPanel({ model, onModelChange, draft, onDraftChange, profile, onAddRefs }: ParamsPanelProps) {
+export function ParamsPanel({ model, onModelChange, draft, onDraftChange, profile, onAddRefs, remoteModels, refreshingModels, onRefreshModels }: ParamsPanelProps) {
   const t = useT()
   const fileInput = useRef<HTMLInputElement>(null)
   const refsFull = draft.refs.length >= profile.maxRefs
+  const [previewId, setPreviewId] = useState<string | null>(null)
+  // Пока пользователь не печатал, показываем все модели, а не только совпадающие с текущим значением.
+  const [typed, setTyped] = useState(false)
+  const suggestions = modelSuggestions(remoteModels)
 
   function sizeLabel(size: string): string {
     return size === 'auto' ? t('params.size.auto') : size.replace('x', ' × ')
@@ -48,28 +64,54 @@ export function ParamsPanel({ model, onModelChange, draft, onDraftChange, profil
     onAddRefs(files)
   }
 
-  function setRole(imageId: string, role: RefRole): void {
-    onDraftChange({ refs: draft.refs.map((r) => (r.imageId === imageId ? { ...r, role } : r)) })
+  function patchRef(imageId: string, patch: { role?: RefRole; note?: string }): void {
+    onDraftChange({ refs: draft.refs.map((r) => (r.imageId === imageId ? { ...r, ...patch } : r)) })
   }
 
   return (
     <div className="space-y-5 p-4">
       <div className="space-y-2">
-        <Label htmlFor="params-model">{t('params.model')}</Label>
-        <Input
-          id="params-model"
-          list="params-model-list"
+        <div className="flex items-center justify-between">
+          <Label htmlFor="params-model">{t('params.model')}</Label>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-xs"
+            onClick={onRefreshModels}
+            disabled={refreshingModels}
+            aria-label={t('params.models.refresh')}
+            title={t('params.models.refresh')}
+          >
+            <RefreshCw className={refreshingModels ? 'animate-spin' : undefined} aria-hidden="true" />
+          </Button>
+        </div>
+        <Combobox
+          items={suggestions}
           value={model}
-          onChange={(e) => onModelChange(e.target.value)}
-          spellCheck={false}
-          autoComplete="off"
-          className="font-mono"
-        />
-        <datalist id="params-model-list">
-          {modelSuggestions().map((name) => (
-            <option key={name} value={name} />
-          ))}
-        </datalist>
+          inputValue={model}
+          filter={(item: string, query: string) => !typed || item.toLowerCase().includes(query.trim().toLowerCase())}
+          onOpenChange={(open) => open && setTyped(false)}
+          onInputValueChange={(value, details) => {
+            if (details.reason === 'input-change') setTyped(true)
+            onModelChange(value)
+          }}
+          onValueChange={(value) => value && onModelChange(value)}
+        >
+          <ComboboxInput id="params-model" spellCheck={false} autoComplete="off" className="font-mono" />
+          <ComboboxContent>
+            <ComboboxEmpty>{t('params.models.empty')}</ComboboxEmpty>
+            <ComboboxList>
+              {(item: string) => (
+                <ComboboxItem key={item} value={item} className="font-mono">
+                  {item}
+                </ComboboxItem>
+              )}
+            </ComboboxList>
+          </ComboboxContent>
+        </Combobox>
+        {remoteModels.length > 0 && (
+          <p className="text-xs text-muted-foreground">{t('params.models.count', { n: remoteModels.length })}</p>
+        )}
       </div>
 
       <div className="space-y-2">
@@ -150,29 +192,47 @@ export function ParamsPanel({ model, onModelChange, draft, onDraftChange, profil
         {draft.refs.length > 0 && (
           <ul className="space-y-2">
             {draft.refs.map((ref) => (
-              <li key={ref.imageId} className="flex items-center gap-2">
-                <Thumb imageId={ref.imageId} className="size-10 shrink-0 rounded-md" />
-                <Select value={ref.role} onValueChange={(role) => role && setRole(ref.imageId, role as RefRole)}>
-                  <SelectTrigger size="sm" className="min-w-0 flex-1">
-                    <SelectValue>{(value: RefRole) => t(`role.${value}` as Key)}</SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    {ROLES.map((role) => (
-                      <SelectItem key={role} value={role}>
-                        {t(`role.${role}` as Key)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label={t('params.refs.remove')}
-                  onClick={() => onDraftChange({ refs: draft.refs.filter((r) => r.imageId !== ref.imageId) })}
-                >
-                  <X aria-hidden="true" />
-                </Button>
+              <li key={ref.imageId} className="space-y-1.5">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPreviewId(ref.imageId)}
+                    aria-label={t('params.refs.preview')}
+                    title={t('params.refs.preview')}
+                    className="shrink-0 rounded-md outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+                  >
+                    <Thumb imageId={ref.imageId} className="size-10 rounded-md transition-opacity hover:opacity-80" />
+                  </button>
+                  <Select value={ref.role} onValueChange={(role) => role && patchRef(ref.imageId, { role: role as RefRole })}>
+                    <SelectTrigger size="sm" className="min-w-0 flex-1">
+                      <SelectValue>{(value: RefRole) => t(`role.${value}` as Key)}</SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {ROLES.map((role) => (
+                        <SelectItem key={role} value={role}>
+                          {t(`role.${role}` as Key)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={t('params.refs.remove')}
+                    onClick={() => onDraftChange({ refs: draft.refs.filter((r) => r.imageId !== ref.imageId) })}
+                  >
+                    <X aria-hidden="true" />
+                  </Button>
+                </div>
+                {ref.role === 'custom' && (
+                  <Input
+                    value={ref.note ?? ''}
+                    onChange={(e) => patchRef(ref.imageId, { note: e.target.value })}
+                    placeholder={t('params.refs.note')}
+                    aria-label={t('params.refs.note')}
+                  />
+                )}
               </li>
             ))}
           </ul>
@@ -186,6 +246,9 @@ export function ParamsPanel({ model, onModelChange, draft, onDraftChange, profil
           {refsFull ? t('params.refs.max', { n: profile.maxRefs }) : t('params.refs.hint')}
         </p>
       </div>
+      {previewId && (
+        <ImagePreviewDialog imageId={previewId} title={t('params.refs')} onClose={() => setPreviewId(null)} />
+      )}
     </div>
   )
 }

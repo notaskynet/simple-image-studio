@@ -11,6 +11,7 @@ const KEYS = {
   profiles: 'lumo.profiles',
   disabled: 'lumo.disabled',
   migrated: 'lumo.migrated',
+  modelList: 'lumo.modelList',
 } as const
 
 type SettingKey = keyof typeof KEYS
@@ -67,6 +68,9 @@ export const settings = {
   setProfileOverrides: (value: Record<string, unknown>): void => write('profiles', JSON.stringify(value)),
   getDisabledParams: (): Record<string, string[]> => readJson<Record<string, string[]>>('disabled', {}),
   setDisabledParams: (value: Record<string, string[]>): void => write('disabled', JSON.stringify(value)),
+  getModelList: (): { at: number; source: string; models: string[] } | null => readJson<{ at: number; source: string; models: string[] } | null>('modelList', null),
+  setModelList: (value: { at: number; source: string; models: string[] } | null): void =>
+    write('modelList', value ? JSON.stringify(value) : null),
   isMigrated: (): boolean => read('migrated') === '1',
   setMigrated: (): void => write('migrated', '1'),
 }
