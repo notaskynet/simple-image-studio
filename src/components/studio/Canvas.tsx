@@ -18,6 +18,7 @@ import {
 } from 'lucide-react'
 import { useEffect, useRef, useState, type ChangeEvent, type PointerEvent, type RefObject } from 'react'
 
+import { Tip } from '@/components/Tip'
 import { Button } from '@/components/ui/button'
 import { Slider } from '@/components/ui/slider'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
@@ -55,6 +56,8 @@ function frameStyle(ratio: number): React.CSSProperties {
 }
 
 const MAX_ZOOM = 8
+
+const MOD = typeof navigator !== 'undefined' && /mac|iphone|ipad/i.test(navigator.platform) ? '⌘' : 'Ctrl'
 
 interface View {
   scale: number
@@ -165,6 +168,32 @@ function VersionView({ version, parent, profile, editable, maskRef, onCancel, on
     return () => el.removeEventListener('wheel', onWheel)
   }, [version.status])
 
+  const maskActive = editable && version.status === 'done' && profile.mask !== 'none' && !compare
+
+  // Горячие клавиши маски; не перехватываем клавиши, пока пользователь печатает в поле ввода.
+  useEffect(() => {
+    if (!maskActive) return
+    function onKeyDown(event: KeyboardEvent): void {
+      const target = event.target as HTMLElement | null
+      if (target?.closest('input, textarea, select, [contenteditable="true"]')) return
+      const key = event.key.toLowerCase()
+      if ((event.metaKey || event.ctrlKey) && key === 'z') {
+        event.preventDefault()
+        if (event.shiftKey) maskRef.current?.redo()
+        else maskRef.current?.undo()
+      } else if ((event.metaKey || event.ctrlKey) && key === 'y') {
+        event.preventDefault()
+        maskRef.current?.redo()
+      } else if (!event.metaKey && !event.ctrlKey && !event.altKey) {
+        if (key === 'b') setTool('brush')
+        else if (key === 'e') setTool('eraser')
+        else if (key === 'h') setTool('hand')
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [maskActive, maskRef])
+
   const ratio = ratioOf(version, natural)
   const canMask = editable && version.status === 'done' && profile.mask !== 'none' && !compare
   const panning = tool === 'hand' || !canMask
@@ -232,57 +261,83 @@ function VersionView({ version, parent, profile, editable, maskRef, onCancel, on
           onValueChange={(value) => value[0] && setTool(value[0] as Tool)}
           aria-label={t('canvas.maskHint')}
         >
-          <ToggleGroupItem value="brush" disabled={!canMask} aria-label={t('canvas.brush')} title={t('canvas.brush')}>
-            <Brush aria-hidden="true" />
-          </ToggleGroupItem>
-          <ToggleGroupItem value="eraser" disabled={!canMask} aria-label={t('canvas.eraser')} title={t('canvas.eraser')}>
-            <Eraser aria-hidden="true" />
-          </ToggleGroupItem>
-          <ToggleGroupItem value="hand" aria-label={t('canvas.hand')} title={t('canvas.hand')}>
-            <Hand aria-hidden="true" />
-          </ToggleGroupItem>
+          <Tip label={`${t('canvas.brush')} (B)`}>
+            <ToggleGroupItem value="brush" disabled={!canMask} aria-label={t('canvas.brush')}>
+              <Brush aria-hidden="true" />
+            </ToggleGroupItem>
+          </Tip>
+          <Tip label={`${t('canvas.eraser')} (E)`}>
+            <ToggleGroupItem value="eraser" disabled={!canMask} aria-label={t('canvas.eraser')}>
+              <Eraser aria-hidden="true" />
+            </ToggleGroupItem>
+          </Tip>
+          <Tip label={`${t('canvas.hand')} (H)`}>
+            <ToggleGroupItem value="hand" aria-label={t('canvas.hand')}>
+              <Hand aria-hidden="true" />
+            </ToggleGroupItem>
+          </Tip>
         </ToggleGroup>
-        <div className="w-24">
-          <Slider
-            value={[brushSize]}
-            min={2}
-            max={100}
-            disabled={!canMask}
-            onValueChange={(value) => setBrushSize(Array.isArray(value) ? value[0] : value)}
-            aria-label={t('canvas.brushSize')}
-          />
-        </div>
-        <Button variant="ghost" size="icon-sm" disabled={!canMask || !maskState.canUndo} onClick={() => maskRef.current?.undo()} aria-label={t('canvas.undo')} title={t('canvas.undo')}>
-          <Undo2 aria-hidden="true" />
-        </Button>
-        <Button variant="ghost" size="icon-sm" disabled={!canMask || !maskState.canRedo} onClick={() => maskRef.current?.redo()} aria-label={t('canvas.redo')} title={t('canvas.redo')}>
-          <Redo2 aria-hidden="true" />
-        </Button>
-        <Button variant="ghost" size="icon-sm" disabled={!canMask || !maskState.hasPaint} onClick={() => maskRef.current?.clear()} aria-label={t('canvas.clearMask')} title={t('canvas.clearMask')}>
-          <Trash2 aria-hidden="true" />
-        </Button>
+        <Tip label={t('canvas.brushSize')}>
+          <div className="w-24">
+            <Slider
+              value={[brushSize]}
+              min={2}
+              max={100}
+              disabled={!canMask}
+              onValueChange={(value) => setBrushSize(Array.isArray(value) ? value[0] : value)}
+              aria-label={t('canvas.brushSize')}
+            />
+          </div>
+        </Tip>
+        <Tip label={`${t('canvas.undo')} (${MOD}+Z)`}>
+          <Button variant="ghost" size="icon-sm" disabled={!canMask || !maskState.canUndo} onClick={() => maskRef.current?.undo()} aria-label={t('canvas.undo')}>
+            <Undo2 aria-hidden="true" />
+          </Button>
+        </Tip>
+        <Tip label={`${t('canvas.redo')} (${MOD}+Shift+Z)`}>
+          <Button variant="ghost" size="icon-sm" disabled={!canMask || !maskState.canRedo} onClick={() => maskRef.current?.redo()} aria-label={t('canvas.redo')}>
+            <Redo2 aria-hidden="true" />
+          </Button>
+        </Tip>
+        <Tip label={t('canvas.clearMask')}>
+          <Button variant="ghost" size="icon-sm" disabled={!canMask || !maskState.hasPaint} onClick={() => maskRef.current?.clear()} aria-label={t('canvas.clearMask')}>
+            <Trash2 aria-hidden="true" />
+          </Button>
+        </Tip>
 
         <div className="ml-auto flex items-center gap-1">
-          <Button variant="ghost" size="icon-sm" disabled={view.scale <= 1} onClick={() => zoomBy(1 / 1.5)} aria-label={t('canvas.zoomOut')} title={t('canvas.zoomOut')}>
-            <ZoomOut aria-hidden="true" />
-          </Button>
-          <Button variant="ghost" size="xs" disabled={view.scale === 1} onClick={() => setView(FIT)} aria-label={t('canvas.zoomFit')} title={t('canvas.zoomFit')} className="w-12 tabular-nums">
-            {view.scale === 1 ? <Maximize aria-hidden="true" /> : `${Math.round(view.scale * 100)}%`}
-          </Button>
-          <Button variant="ghost" size="icon-sm" disabled={view.scale >= MAX_ZOOM} onClick={() => zoomBy(1.5)} aria-label={t('canvas.zoomIn')} title={t('canvas.zoomIn')}>
-            <ZoomIn aria-hidden="true" />
-          </Button>
-          {canCompare && (
-            <Button variant={compare ? 'secondary' : 'ghost'} size="icon-sm" onClick={() => setCompare((v) => !v)} aria-pressed={compare} aria-label={compare ? t('canvas.compareOff') : t('canvas.compare')} title={compare ? t('canvas.compareOff') : t('canvas.compare')}>
-              <Columns2 aria-hidden="true" />
+          <Tip label={t('canvas.zoomOut')}>
+            <Button variant="ghost" size="icon-sm" disabled={view.scale <= 1} onClick={() => zoomBy(1 / 1.5)} aria-label={t('canvas.zoomOut')}>
+              <ZoomOut aria-hidden="true" />
             </Button>
+          </Tip>
+          <Tip label={t('canvas.zoomFit')}>
+            <Button variant="ghost" size="xs" disabled={view.scale === 1} onClick={() => setView(FIT)} aria-label={t('canvas.zoomFit')} className="w-12 tabular-nums">
+              {view.scale === 1 ? <Maximize aria-hidden="true" /> : `${Math.round(view.scale * 100)}%`}
+            </Button>
+          </Tip>
+          <Tip label={t('canvas.zoomIn')}>
+            <Button variant="ghost" size="icon-sm" disabled={view.scale >= MAX_ZOOM} onClick={() => zoomBy(1.5)} aria-label={t('canvas.zoomIn')}>
+              <ZoomIn aria-hidden="true" />
+            </Button>
+          </Tip>
+          {canCompare && (
+            <Tip label={compare ? t('canvas.compareOff') : t('canvas.compare')}>
+              <Button variant={compare ? 'secondary' : 'ghost'} size="icon-sm" onClick={() => setCompare((v) => !v)} aria-pressed={compare} aria-label={compare ? t('canvas.compareOff') : t('canvas.compare')}>
+                <Columns2 aria-hidden="true" />
+              </Button>
+            </Tip>
           )}
-          <Button variant="ghost" size="icon-sm" onClick={() => onDownload(version)} aria-label={t('canvas.downloadImage')} title={t('canvas.downloadImage')}>
-            <Download aria-hidden="true" />
-          </Button>
-          <Button variant="ghost" size="icon-sm" onClick={() => onCopyImage(version)} aria-label={t('canvas.copyImage')} title={t('canvas.copyImage')}>
-            <Copy aria-hidden="true" />
-          </Button>
+          <Tip label={t('canvas.downloadImage')}>
+            <Button variant="ghost" size="icon-sm" onClick={() => onDownload(version)} aria-label={t('canvas.downloadImage')}>
+              <Download aria-hidden="true" />
+            </Button>
+          </Tip>
+          <Tip label={t('canvas.copyImage')}>
+            <Button variant="ghost" size="icon-sm" onClick={() => onCopyImage(version)} aria-label={t('canvas.copyImage')}>
+              <Copy aria-hidden="true" />
+            </Button>
+          </Tip>
           {version.recipe.prompt && (
             <Button variant="ghost" size="xs" onClick={() => onCopyPrompt(version)}>
               {t('canvas.copyPrompt')}

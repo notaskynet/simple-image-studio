@@ -2,6 +2,7 @@ import { ImagePlus, RefreshCw, X } from 'lucide-react'
 import { useRef, useState, type ChangeEvent, type DragEvent } from 'react'
 
 import { ImagePreviewDialog } from '@/components/ImagePreviewDialog'
+import { Tip } from '@/components/Tip'
 import { Thumb } from '@/components/Thumb'
 import { Button } from '@/components/ui/button'
 import {
@@ -37,7 +38,8 @@ interface ParamsPanelProps {
   onRefreshModels: () => void
 }
 
-const ROLES: RefRole[] = ['style', 'subject', 'character', 'other', 'custom']
+// «Другое» не предлагаем: для всего остального есть «Свой вариант». Старые референсы с ролью other показываются как custom.
+const ROLES: RefRole[] = ['style', 'subject', 'character', 'custom']
 const COUNTS = [1, 2, 3, 4]
 
 export function ParamsPanel({ model, onModelChange, draft, onDraftChange, profile, onAddRefs, refUsage, remoteModels, refreshingModels, onRefreshModels }: ParamsPanelProps) {
@@ -75,17 +77,18 @@ export function ParamsPanel({ model, onModelChange, draft, onDraftChange, profil
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <Label htmlFor="params-model">{t('params.model')}</Label>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-xs"
-            onClick={onRefreshModels}
-            disabled={refreshingModels}
-            aria-label={t('params.models.refresh')}
-            title={t('params.models.refresh')}
-          >
-            <RefreshCw className={refreshingModels ? 'animate-spin' : undefined} aria-hidden="true" />
-          </Button>
+          <Tip label={t('params.models.refresh')}>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-xs"
+              onClick={onRefreshModels}
+              disabled={refreshingModels}
+              aria-label={t('params.models.refresh')}
+            >
+              <RefreshCw className={refreshingModels ? 'animate-spin' : undefined} aria-hidden="true" />
+            </Button>
+          </Tip>
         </div>
         <Combobox
           items={suggestions}
@@ -200,14 +203,16 @@ export function ParamsPanel({ model, onModelChange, draft, onDraftChange, profil
                     type="button"
                     onClick={() => setPreviewId(ref.imageId)}
                     aria-label={t('params.refs.preview')}
-                    title={t('params.refs.preview')}
                     className="shrink-0 rounded-md outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
                   >
                     <Thumb imageId={ref.imageId} className="size-10 rounded-md transition-opacity hover:opacity-80" />
                   </button>
-                  <Select value={ref.role} onValueChange={(role) => role && patchRef(ref.imageId, { role: role as RefRole })}>
+                  <Select
+                    value={ref.role === 'other' ? 'custom' : ref.role}
+                    onValueChange={(role) => role && patchRef(ref.imageId, { role: role as RefRole })}
+                  >
                     <SelectTrigger size="sm" className="min-w-0 flex-1">
-                      <SelectValue>{(value: RefRole) => t(`role.${value}` as Key)}</SelectValue>
+                      <SelectValue>{(value: RefRole) => t(`role.${value === 'other' ? 'custom' : value}` as Key)}</SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       {ROLES.map((role) => (
@@ -232,7 +237,7 @@ export function ParamsPanel({ model, onModelChange, draft, onDraftChange, profil
                     {t('params.refs.usedIn', { versions: refUsage[ref.imageId].map((n) => `v${n}`).join(', ') })}
                   </p>
                 )}
-                {ref.role === 'custom' && (
+                {(ref.role === 'custom' || ref.role === 'other') && (
                   <Input
                     value={ref.note ?? ''}
                     onChange={(e) => patchRef(ref.imageId, { note: e.target.value })}

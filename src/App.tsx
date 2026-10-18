@@ -4,6 +4,7 @@ import { Onboarding } from '@/components/Onboarding'
 import { SettingsDialog } from '@/components/SettingsDialog'
 import { StudioView } from '@/components/studio/StudioView'
 import { Toaster } from '@/components/ui/sonner'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import { useTheme } from '@/hooks/useTheme'
 import { useI18n } from '@/i18n'
 import { DEFAULT_MODEL } from '@/lib/models'
@@ -38,7 +39,7 @@ export default function App() {
   const configured = !!baseUrl && !!apiKey
 
   return (
-    <>
+    <TooltipProvider>
       {configured ? (
         <StudioView
           baseUrl={baseUrl}
@@ -66,6 +67,6 @@ export default function App() {
         />
       )}
       <Toaster theme={theme} />
-    </>
+    </TooltipProvider>
   )
 }

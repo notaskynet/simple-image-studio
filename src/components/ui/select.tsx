@@ -58,9 +58,10 @@ function SelectContent({
   children,
   side = "bottom",
   sideOffset = 4,
-  align = "center",
+  align = "start",
   alignOffset = 0,
-  alignItemWithTrigger = true,
+  // false: список раскрывается под полем и не перекрывает соседние элементы (по умолчанию он совмещает выбранный пункт с полем).
+  alignItemWithTrigger = false,
   ...props
 }: SelectPrimitive.Popup.Props &
   Pick<

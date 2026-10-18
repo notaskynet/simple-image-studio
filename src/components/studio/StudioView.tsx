@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } fro
 
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { LanguageToggle } from '@/components/LanguageToggle'
+import { Tip } from '@/components/Tip'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -165,7 +166,7 @@ export function StudioView({ baseUrl, apiKey, theme, profileTick, onToggleTheme,
       const added = await Promise.all(
         files.slice(0, room).map(async (file) => ({
           imageId: await store.saveAsset(await prepareUpload(file)),
-          role: 'other' as const,
+          role: 'custom' as const,
         })),
       )
       if (added.length > 0) setDraft((d) => ({ ...d, refs: [...d.refs, ...added] }))
@@ -350,21 +351,29 @@ export function StudioView({ baseUrl, apiKey, theme, profileTick, onToggleTheme,
         <div className="ml-auto flex items-center gap-1">
           {!desktop && (
             <>
-              <Button variant="ghost" size="icon" onClick={() => setParamsOpen(true)} aria-label={t('params.title')} title={t('params.title')}>
+              <Tip label={t('params.title')}>
+            <Button variant="ghost" size="icon" onClick={() => setParamsOpen(true)} aria-label={t('params.title')}>
                 <SlidersHorizontal aria-hidden="true" />
               </Button>
-              <Button variant="ghost" size="icon" onClick={() => setVersionsOpen(true)} aria-label={t('versions.title')} title={t('versions.title')}>
+          </Tip>
+              <Tip label={t('versions.title')}>
+            <Button variant="ghost" size="icon" onClick={() => setVersionsOpen(true)} aria-label={t('versions.title')}>
                 <Layers aria-hidden="true" />
               </Button>
+          </Tip>
             </>
           )}
           <LanguageToggle />
-          <Button variant="ghost" size="icon" onClick={onToggleTheme} aria-label={t('common.theme')} title={t('common.theme')}>
+          <Tip label={t('common.theme')}>
+            <Button variant="ghost" size="icon" onClick={onToggleTheme} aria-label={t('common.theme')}>
             {theme === 'dark' ? <Sun aria-hidden="true" /> : <Moon aria-hidden="true" />}
           </Button>
-          <Button variant="ghost" size="icon" onClick={onOpenSettings} aria-label={t('common.settings')} title={t('common.settings')}>
+          </Tip>
+          <Tip label={t('common.settings')}>
+            <Button variant="ghost" size="icon" onClick={onOpenSettings} aria-label={t('common.settings')}>
             <Settings aria-hidden="true" />
           </Button>
+          </Tip>
         </div>
       </header>
 
