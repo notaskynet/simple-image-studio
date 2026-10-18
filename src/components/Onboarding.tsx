@@ -6,6 +6,7 @@ import { useT } from '@/i18n'
 import { normalizeBaseUrl } from '@/lib/api'
 import { ApiKeyInput } from './ApiKeyInput'
 import { BaseUrlInput } from './BaseUrlInput'
+import { LanguageToggle } from './LanguageToggle'
 
 interface OnboardingProps {
   initialBaseUrl: string
@@ -28,7 +29,10 @@ export function Onboarding({ initialBaseUrl, initialApiKey, onSave }: Onboarding
   }
 
   return (
-    <main className="flex min-h-dvh items-center justify-center px-4 py-10">
+    <main className="relative flex min-h-dvh items-center justify-center px-4 py-10">
+      <div className="absolute top-3 right-3">
+        <LanguageToggle />
+      </div>
       <div className="w-full max-w-md rounded-xl border bg-card p-8 text-card-foreground">
         <h1 className="text-xl font-semibold tracking-tight">{t('onboarding.title')}</h1>
         <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{t('onboarding.text')}</p>

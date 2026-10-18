@@ -7,7 +7,6 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { useI18n, type Key } from '@/i18n'
 import { normalizeBaseUrl } from '@/lib/api'
 import {
@@ -21,6 +20,7 @@ import {
 } from '@/lib/models'
 import { ApiKeyInput } from './ApiKeyInput'
 import { BaseUrlInput } from './BaseUrlInput'
+import { LanguageToggle } from './LanguageToggle'
 
 interface SettingsDialogProps {
   baseUrl: string
@@ -49,7 +49,7 @@ export function SettingsDialog({
   onProfileChange,
   onClose,
 }: SettingsDialogProps) {
-  const { t, lang, setLang } = useI18n()
+  const { t } = useI18n()
   const [urlValue, setUrlValue] = useState(baseUrl)
   const [keyValue, setKeyValue] = useState(apiKey)
   const [profileModel, setProfileModel] = useState(model)
@@ -109,17 +109,7 @@ export function SettingsDialog({
 
           <div className="space-y-2">
             <Label>{t('common.language')}</Label>
-            <ToggleGroup
-              variant="outline"
-              value={[lang]}
-              onValueChange={(value) => {
-                const next = value[0]
-                if (next === 'ru' || next === 'en') setLang(next)
-              }}
-            >
-              <ToggleGroupItem value="ru">Русский</ToggleGroupItem>
-              <ToggleGroupItem value="en">English</ToggleGroupItem>
-            </ToggleGroup>
+            <LanguageToggle />
           </div>
 
           <div className="flex justify-end">

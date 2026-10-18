@@ -2,6 +2,7 @@ import { FolderOpen, Layers, Moon, Settings, SlidersHorizontal, Sun } from 'luci
 import { useCallback, useMemo, useRef, useState, type DragEvent } from 'react'
 
 import { ConfirmDialog } from '@/components/ConfirmDialog'
+import { LanguageToggle } from '@/components/LanguageToggle'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -312,6 +313,7 @@ export function StudioView({ baseUrl, apiKey, theme, profileTick, onToggleTheme,
               </Button>
             </>
           )}
+          <LanguageToggle />
           <Button variant="ghost" size="icon" onClick={onToggleTheme} aria-label={t('common.theme')} title={t('common.theme')}>
             {theme === 'dark' ? <Sun aria-hidden="true" /> : <Moon aria-hidden="true" />}
           </Button>
