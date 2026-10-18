@@ -27,6 +27,7 @@ import { useT, describeCode } from '@/i18n'
 import { sizeLabelParts, type ModelProfile } from '@/lib/models'
 import { cn } from '@/lib/utils'
 import type { Version } from '@/types'
+import { SnakeLoader } from './SnakeLoader'
 import { MaskLayer, type MaskHandle, type MaskState, type MaskTool } from './MaskLayer'
 
 interface CanvasProps {
@@ -174,8 +175,8 @@ function VersionView({ version, parent, profile, editable, maskRef, onCancel, on
     return (
       <div className="flex min-h-0 flex-1 items-center justify-center p-4" style={{ containerType: 'size' }}>
         <div className="relative overflow-hidden rounded-lg" style={frameStyle(ratio)}>
-          <div className="shimmer absolute inset-0" />
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
+          <SnakeLoader className="absolute inset-0 size-full" />
+          <div className="absolute inset-x-0 bottom-0 flex flex-col items-center gap-2 p-3">
             <span className="rounded-full bg-background/80 px-3 py-1 text-sm tabular-nums">
               {t('canvas.loading')} {elapsed}s
             </span>

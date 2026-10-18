@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-import { generateImages } from '../lib/api'
+import { generateImages, type GenerationResult } from '../lib/api'
 import {
   clearAll,
   deleteImages,
@@ -282,14 +282,14 @@ export function useProject(config: ProjectApiConfig, events: ProjectEvents, impo
 
       try {
         const profile = getProfile(recipe.model)
-        let images: Awaited<ReturnType<typeof generateImages>> | null = null
+        let generated: GenerationResult | null = null
         let sentRequest: Version['sent']
-        for (let attempt = 0; attempt < 4 && !images; attempt++) {
+        for (let attempt = 0; attempt < 4 && !generated; attempt++) {
           const built = await buildRequest({ recipe, base, profile, disabled: getDisabled(recipe.model) })
           sentRequest = built.sent
           pending.forEach((v) => patchVersion(v.id, { sent: built.sent }, false))
           try {
-            images = await generateImages({ ...configRef.current, ...built.params, signal: controller.signal })
+            generated = await generateImages({ ...configRef.current, ...built.params, signal: controller.signal })
           } catch (error) {
             // Провайдер отклонил необязательный параметр: отключаем его для модели и повторяем без него.
             if (error instanceof AppError && error.code === 'param_rejected' && error.param) {
@@ -300,8 +300,9 @@ export function useProject(config: ProjectApiConfig, events: ProjectEvents, impo
             throw error
           }
         }
-        if (!images) throw new AppError('empty')
-        const result = images
+        if (!generated) throw new AppError('empty')
+        const result = generated.images
+        const response = generated.responses.length > 0 ? generated.responses : undefined
 
         await Promise.all(
           pending.map(async (version, i) => {
@@ -315,6 +316,7 @@ export function useProject(config: ProjectApiConfig, events: ProjectEvents, impo
             patchVersion(version.id, {
               status: 'done',
               sent: sentRequest,
+              response,
               imageId: image.blob ? imageId : undefined,
               mime: image.blob?.type ?? 'image/png',
               remoteUrl: image.blob ? undefined : image.url,

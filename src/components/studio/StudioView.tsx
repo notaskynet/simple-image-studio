@@ -81,6 +81,14 @@ export function StudioView({ baseUrl, apiKey, theme, profileTick, onToggleTheme,
     [versions, project?.id],
   )
   const selected = projectVersions.find((v) => v.id === selectedId)
+  /** В каких версиях использован каждый референс. */
+  const refUsage = useMemo(() => {
+    const usage: Record<string, number[]> = {}
+    for (const v of [...projectVersions].sort((a, b) => a.number - b.number)) {
+      for (const ref of v.recipe.refs) (usage[ref.imageId] ??= []).push(v.number)
+    }
+    return usage
+  }, [projectVersions])
   const parent = selected?.parentId ? projectVersions.find((v) => v.id === selected.parentId) : undefined
   const base = editing && selected?.status === 'done' ? selected : undefined
 
@@ -206,7 +214,7 @@ export function StudioView({ baseUrl, apiKey, theme, profileTick, onToggleTheme,
         refs: draft.refs,
       }
       maskRef.current?.clear()
-      setDraft((d) => ({ ...d, prompt: '', refs: [] }))
+      setDraft((d) => ({ ...d, prompt: '' }))
       void store.run({
         projectId: id,
         recipe,
@@ -294,6 +302,7 @@ export function StudioView({ baseUrl, apiKey, theme, profileTick, onToggleTheme,
       onDraftChange={patchDraft}
       profile={profile}
       onAddRefs={(files) => void addRefs(files)}
+      refUsage={refUsage}
       remoteModels={remoteModels}
       refreshingModels={refreshingModels}
       onRefreshModels={() => void refreshModels(true)}
@@ -323,7 +332,10 @@ export function StudioView({ baseUrl, apiKey, theme, profileTick, onToggleTheme,
         />
       </TabsContent>
       <TabsContent value="request" className="min-h-0 flex-1 overflow-y-auto">
-        <RequestInspector version={selected} />
+        <RequestInspector
+          version={selected}
+          onUseRefs={(refs) => patchDraft({ refs: refs.slice(0, profile.maxRefs) })}
+        />
       </TabsContent>
     </Tabs>
   )

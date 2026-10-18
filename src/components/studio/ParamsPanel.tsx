@@ -30,6 +30,8 @@ interface ParamsPanelProps {
   onDraftChange: (patch: Partial<Draft>) => void
   profile: ModelProfile
   onAddRefs: (files: File[]) => void
+  /** imageId → номера версий, в которых референс использовался. */
+  refUsage: Record<string, number[]>
   remoteModels: string[]
   refreshingModels: boolean
   onRefreshModels: () => void
@@ -38,7 +40,7 @@ interface ParamsPanelProps {
 const ROLES: RefRole[] = ['style', 'subject', 'character', 'other', 'custom']
 const COUNTS = [1, 2, 3, 4]
 
-export function ParamsPanel({ model, onModelChange, draft, onDraftChange, profile, onAddRefs, remoteModels, refreshingModels, onRefreshModels }: ParamsPanelProps) {
+export function ParamsPanel({ model, onModelChange, draft, onDraftChange, profile, onAddRefs, refUsage, remoteModels, refreshingModels, onRefreshModels }: ParamsPanelProps) {
   const t = useT()
   const fileInput = useRef<HTMLInputElement>(null)
   const refsFull = draft.refs.length >= profile.maxRefs
@@ -225,6 +227,11 @@ export function ParamsPanel({ model, onModelChange, draft, onDraftChange, profil
                     <X aria-hidden="true" />
                   </Button>
                 </div>
+                {refUsage[ref.imageId] && (
+                  <p className="pl-12 text-xs text-muted-foreground">
+                    {t('params.refs.usedIn', { versions: refUsage[ref.imageId].map((n) => `v${n}`).join(', ') })}
+                  </p>
+                )}
                 {ref.role === 'custom' && (
                   <Input
                     value={ref.note ?? ''}

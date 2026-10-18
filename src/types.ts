@@ -54,6 +54,8 @@ export interface Version {
   error?: StoredError
   recipe: Recipe
   sent?: SentRequest
+  /** Ответы провайдера без картинок: usage, стоимость и т.п. */
+  response?: Record<string, unknown>[]
   imageId?: string
   mime?: string
   remoteUrl?: string

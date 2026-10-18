@@ -8,6 +8,12 @@ export interface GeneratedImage {
   url?: string
 }
 
+export interface GenerationResult {
+  images: GeneratedImage[]
+  /** Ответы провайдера без самих картинок (usage, стоимость и т.п.) — по одному на HTTP-запрос. */
+  responses: Record<string, unknown>[]
+}
+
 export interface GenerateParams {
   baseUrl: string
   apiKey: string
@@ -99,6 +105,19 @@ const MODEL_PATTERN = /model|модел/i
 const REJECTABLE = ['quality', 'background', 'negative_prompt', 'input_fidelity', 'mask'] as const
 const COUNT_PATTERN = /\bn\b|number of images|num_images|max_images|too many images|count/i
 
+function responseMeta(body: ApiResponse | null): Record<string, unknown>[] {
+  if (!body || typeof body !== 'object') return []
+  const { data: _data, ...rest } = body as ApiResponse & Record<string, unknown>
+  return Object.keys(rest).length > 0 ? [rest] : []
+}
+
+function mergeResults(results: GenerationResult[]): GenerationResult {
+  return {
+    images: results.flatMap((r) => r.images),
+    responses: results.flatMap((r) => r.responses),
+  }
+}
+
 export function extractMessage(body: ApiResponse | null): string | null {
   if (!body) return null
   if (typeof body.error === 'string') return body.error
@@ -150,7 +169,7 @@ async function urlToImage(url: string, signal: AbortSignal): Promise<GeneratedIm
   }
 }
 
-async function requestImages(params: GenerateParams, n: number): Promise<GeneratedImage[]> {
+async function requestImages(params: GenerateParams, n: number): Promise<GenerationResult> {
   const edit = isEdit(params)
   const { body: requestBody, json } = buildBody(params, n)
   const headers: Record<string, string> = { Authorization: `Bearer ${params.apiKey}` }
@@ -204,13 +223,13 @@ async function requestImages(params: GenerateParams, n: number): Promise<Generat
     const message = extractMessage(body)
     throw message ? new AppError('http', { detail: message, raw }) : new AppError('empty', { raw })
   }
-  return result
+  return { images: result, responses: responseMeta(body) }
 }
 
-async function requestParallel(params: GenerateParams, count: number): Promise<GeneratedImage[]> {
+async function requestParallel(params: GenerateParams, count: number): Promise<GenerationResult> {
   const settled = await Promise.allSettled(Array.from({ length: count }, () => requestImages(params, 1)))
-  const images = settled.flatMap((r) => (r.status === 'fulfilled' ? r.value : []))
-  if (images.length > 0) return images
+  const fulfilled = settled.flatMap((r) => (r.status === 'fulfilled' ? [r.value] : []))
+  if (fulfilled.length > 0) return mergeResults(fulfilled)
   const failure = settled.find((r): r is PromiseRejectedResult => r.status === 'rejected')
   throw failure?.reason ?? new AppError('empty')
 }
@@ -230,13 +249,13 @@ function modelKey(params: GenerateParams): string {
   return `${isEdit(params) ? 'edit' : 'gen'}:${params.model}`
 }
 
-export async function generateImages(params: GenerateParams): Promise<GeneratedImage[]> {
+export async function generateImages(params: GenerateParams): Promise<GenerationResult> {
   if (params.count <= 1) return requestImages(params, 1)
   if (params.singleOnly || singleImageModels.has(modelKey(params))) return requestParallel(params, params.count)
 
-  let images: GeneratedImage[]
+  let first: GenerationResult
   try {
-    images = await requestImages(params, params.count)
+    first = await requestImages(params, params.count)
   } catch (error) {
     if (!isNotSupportedN(error)) throw error
     const result = await requestParallel(params, params.count)
@@ -244,12 +263,12 @@ export async function generateImages(params: GenerateParams): Promise<GeneratedI
     return result
   }
 
-  const missing = params.count - images.length
-  if (missing <= 0) return images.slice(0, params.count)
+  const missing = params.count - first.images.length
+  if (missing <= 0) return { ...first, images: first.images.slice(0, params.count) }
   try {
-    return [...images, ...(await requestParallel(params, missing))]
+    return mergeResults([first, await requestParallel(params, missing)])
   } catch (error) {
     if (params.signal.aborted) throw error
-    return images
+    return first
   }
 }
