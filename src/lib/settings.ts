@@ -1,17 +1,16 @@
-import type { ComposeMode, Theme } from '../types'
+import type { Lang, Theme } from '../types'
 
 const KEYS = {
   baseUrl: 'lumo.baseUrl',
   apiKey: 'lumo.apiKey',
   model: 'lumo.model',
   theme: 'lumo.theme',
-  draft: 'lumo.draft',
-  session: 'lumo.session',
-  sidebar: 'lumo.sidebar',
-  chatModel: 'lumo.chatModel',
-  systemPrompt: 'lumo.systemPrompt',
-  vision: 'lumo.vision',
-  mode: 'lumo.mode',
+  lang: 'lumo.lang',
+  project: 'lumo.project',
+  models: 'lumo.models',
+  profiles: 'lumo.profiles',
+  disabled: 'lumo.disabled',
+  migrated: 'lumo.migrated',
 } as const
 
 type SettingKey = keyof typeof KEYS
@@ -33,6 +32,16 @@ function write(key: SettingKey, value: string | null): void {
   }
 }
 
+function readJson<T>(key: SettingKey, fallback: T): T {
+  const raw = read(key)
+  if (!raw) return fallback
+  try {
+    return JSON.parse(raw) as T
+  } catch {
+    return fallback
+  }
+}
+
 export const settings = {
   getBaseUrl: (): string => read('baseUrl') ?? '',
   setBaseUrl: (value: string | null): void => write('baseUrl', value),
@@ -45,18 +54,19 @@ export const settings = {
     return value === 'light' || value === 'dark' ? value : null
   },
   setTheme: (value: Theme): void => write('theme', value),
-  getSessionId: (): string | null => read('session'),
-  setSessionId: (value: string | null): void => write('session', value),
-  getSidebarOpen: (): boolean => read('sidebar') !== 'closed',
-  setSidebarOpen: (value: boolean): void => write('sidebar', value ? null : 'closed'),
-  getChatModel: (): string | null => read('chatModel'),
-  setChatModel: (value: string | null): void => write('chatModel', value),
-  getSystemPrompt: (): string | null => read('systemPrompt'),
-  setSystemPrompt: (value: string | null): void => write('systemPrompt', value),
-  getVision: (): boolean => read('vision') === 'on',
-  setVision: (value: boolean): void => write('vision', value ? 'on' : null),
-  getMode: (): ComposeMode => (read('mode') === 'direct' ? 'direct' : 'agent'),
-  setMode: (value: ComposeMode): void => write('mode', value === 'agent' ? null : value),
-  getDraft: (): string => read('draft') ?? '',
-  setDraft: (value: string): void => write('draft', value),
+  getLang: (): Lang | null => {
+    const value = read('lang')
+    return value === 'ru' || value === 'en' ? value : null
+  },
+  setLang: (value: Lang): void => write('lang', value),
+  getProjectId: (): string | null => read('project'),
+  setProjectId: (value: string | null): void => write('project', value),
+  getModelHistory: (): string[] => readJson<string[]>('models', []),
+  setModelHistory: (value: string[]): void => write('models', JSON.stringify(value)),
+  getProfileOverrides: <T>(): Record<string, T> => readJson<Record<string, T>>('profiles', {}),
+  setProfileOverrides: (value: Record<string, unknown>): void => write('profiles', JSON.stringify(value)),
+  getDisabledParams: (): Record<string, string[]> => readJson<Record<string, string[]>>('disabled', {}),
+  setDisabledParams: (value: Record<string, string[]>): void => write('disabled', JSON.stringify(value)),
+  isMigrated: (): boolean => read('migrated') === '1',
+  setMigrated: (): void => write('migrated', '1'),
 }

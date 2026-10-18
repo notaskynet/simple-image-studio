@@ -1,26 +1,45 @@
-import { Modal } from './Modal'
-import { buttonDanger, buttonSecondary } from './ui'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import { useT } from '@/i18n'
 
 interface ConfirmDialogProps {
   title: string
-  message: string
+  text: string
   confirmLabel: string
   onConfirm: () => void
   onClose: () => void
 }
 
-export function ConfirmDialog({ title, message, confirmLabel, onConfirm, onClose }: ConfirmDialogProps) {
+export function ConfirmDialog({ title, text, confirmLabel, onConfirm, onClose }: ConfirmDialogProps) {
+  const t = useT()
   return (
-    <Modal title={title} onClose={onClose}>
-      <p className="text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">{message}</p>
-      <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-        <button type="button" onClick={onClose} className={buttonSecondary} data-autofocus>
-          Отмена
-        </button>
-        <button type="button" onClick={onConfirm} className={buttonDanger}>
-          {confirmLabel}
-        </button>
-      </div>
-    </Modal>
+    <AlertDialog open onOpenChange={(open) => !open && onClose()}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{title}</AlertDialogTitle>
+          <AlertDialogDescription>{text}</AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
+          <AlertDialogAction
+            variant="destructive"
+            onClick={() => {
+              onConfirm()
+              onClose()
+            }}
+          >
+            {confirmLabel}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   )
 }

@@ -1,7 +1,9 @@
 import { Eye, EyeOff } from 'lucide-react'
 import { useState } from 'react'
 
-import { focusRing, inputBase } from './ui'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { useT } from '@/i18n'
 
 interface ApiKeyInputProps {
   id: string
@@ -11,11 +13,12 @@ interface ApiKeyInputProps {
 }
 
 export function ApiKeyInput({ id, value, onChange, autoFocus }: ApiKeyInputProps) {
+  const t = useT()
   const [visible, setVisible] = useState(false)
 
   return (
     <div className="relative">
-      <input
+      <Input
         id={id}
         type={visible ? 'text' : 'password'}
         value={value}
@@ -23,19 +26,20 @@ export function ApiKeyInput({ id, value, onChange, autoFocus }: ApiKeyInputProps
         placeholder="sk-..."
         autoComplete="off"
         spellCheck={false}
-        data-autofocus={autoFocus ? true : undefined}
         autoFocus={autoFocus}
-        className={`${inputBase} pr-12 font-mono`}
+        className="pr-10 font-mono"
       />
-      <button
+      <Button
         type="button"
+        variant="ghost"
+        size="icon-sm"
         onClick={() => setVisible((v) => !v)}
-        className={`absolute inset-y-0 right-1.5 my-auto inline-flex size-9 items-center justify-center rounded-xl text-zinc-400 transition hover:text-zinc-700 dark:hover:text-zinc-200 ${focusRing}`}
-        aria-label={visible ? 'Скрыть ключ' : 'Показать ключ'}
+        className="absolute inset-y-0 right-0.5 my-auto"
+        aria-label={visible ? t('field.apiKey.hide') : t('field.apiKey.show')}
         aria-pressed={visible}
       >
-        {visible ? <EyeOff className="size-4" aria-hidden="true" /> : <Eye className="size-4" aria-hidden="true" />}
-      </button>
+        {visible ? <EyeOff aria-hidden="true" /> : <Eye aria-hidden="true" />}
+      </Button>
     </div>
   )
 }

@@ -1,4 +1,4 @@
-import type { ImageSize } from '../types'
+import { AppError } from './errors'
 
 const GENERATIONS_PATH = '/images/generations'
 const EDITS_PATH = '/images/edits'
@@ -13,20 +13,17 @@ export interface GenerateParams {
   apiKey: string
   model: string
   prompt: string
-  size: ImageSize
+  size: string
   count: number
+  quality?: string
+  background?: string
+  negativePrompt?: string
+  inputFidelity?: string
   images?: Blob[]
+  mask?: Blob
+  /** Модель не принимает n > 1: варианты создаются отдельными запросами. */
+  singleOnly?: boolean
   signal: AbortSignal
-}
-
-export class ApiError extends Error {
-  readonly status: number | null
-
-  constructor(message: string, status: number | null = null) {
-    super(message)
-    this.name = 'ApiError'
-    this.status = status
-  }
 }
 
 interface ApiImageItem {
@@ -51,7 +48,7 @@ export function normalizeBaseUrl(value: string): string | null {
   return trimmed
 }
 
-const KNOWN_PATHS = [GENERATIONS_PATH, EDITS_PATH, '/chat/completions']
+const KNOWN_PATHS = [GENERATIONS_PATH, EDITS_PATH]
 
 export function resolveApiUrl(baseUrl: string, path: string): string {
   let base = baseUrl.trim().replace(/\/+$/, '')
@@ -60,33 +57,46 @@ export function resolveApiUrl(baseUrl: string, path: string): string {
   return `${base}${path}`
 }
 
-function resolveEndpoint(baseUrl: string, edit: boolean): string {
-  return resolveApiUrl(baseUrl, edit ? EDITS_PATH : GENERATIONS_PATH)
+export function isEdit(params: Pick<GenerateParams, 'images'>): boolean {
+  return !!params.images && params.images.length > 0
+}
+
+/** Текстовые поля запроса — ровно то, что уходит в API (и показывается в инспекторе). */
+export function requestFields(params: GenerateParams, n: number): Record<string, string> {
+  const fields: Record<string, string> = {
+    model: params.model,
+    prompt: params.prompt,
+    size: params.size,
+    n: String(n),
+  }
+  if (params.quality) fields.quality = params.quality
+  if (params.background) fields.background = params.background
+  if (params.negativePrompt) fields.negative_prompt = params.negativePrompt
+  if (isEdit(params) && params.inputFidelity) fields.input_fidelity = params.inputFidelity
+  return fields
 }
 
 const EXTENSIONS: Record<string, string> = { 'image/jpeg': 'jpg', 'image/webp': 'webp' }
 
 function buildBody(params: GenerateParams, n: number): { body: BodyInit; json: boolean } {
-  if (!params.images || params.images.length === 0) {
-    return {
-      body: JSON.stringify({ model: params.model, prompt: params.prompt, size: params.size, n }),
-      json: true,
-    }
-  }
+  const fields = requestFields(params, n)
+  if (!isEdit(params)) return { body: JSON.stringify({ ...fields, n }), json: true }
+
   const form = new FormData()
-  form.append('model', params.model)
-  form.append('prompt', params.prompt)
-  form.append('size', params.size)
-  form.append('n', String(n))
-  const field = params.images.length > 1 ? 'image[]' : 'image'
-  params.images.forEach((blob, i) => {
+  for (const [name, value] of Object.entries(fields)) form.append(name, value)
+  const images = params.images ?? []
+  const field = images.length > 1 ? 'image[]' : 'image'
+  images.forEach((blob, i) => {
     form.append(field, blob, `image-${i + 1}.${EXTENSIONS[blob.type] ?? 'png'}`)
   })
+  if (params.mask) form.append('mask', params.mask, 'mask.png')
   return { body: form, json: false }
 }
 
 const BALANCE_PATTERN = /insufficient|balance|quota|credit|funds|баланс|средств/i
 const MODEL_PATTERN = /model|модел/i
+const REJECTABLE = ['quality', 'background', 'negative_prompt', 'input_fidelity', 'mask'] as const
+const COUNT_PATTERN = /\bn\b|number of images|num_images|max_images|too many images|count/i
 
 export function extractMessage(body: ApiResponse | null): string | null {
   if (!body) return null
@@ -94,13 +104,24 @@ export function extractMessage(body: ApiResponse | null): string | null {
   return body.error?.message ?? body.message ?? null
 }
 
-export function toUserMessage(status: number, message: string | null, model: string): string {
-  if (status === 401) return 'Неверный ключ'
-  if (status === 402 || (message && BALANCE_PATTERN.test(message))) return 'Пополните баланс'
-  if (status === 404 || (status === 400 && message && MODEL_PATTERN.test(message))) {
-    return `Модель «${model}» недоступна${message ? `: ${message}` : ''}`
+export function findRejectedParam(message: string | null): string | null {
+  if (!message) return null
+  const lower = message.toLowerCase()
+  return REJECTABLE.find((name) => lower.includes(name)) ?? null
+}
+
+function classify(status: number, message: string | null): AppError {
+  if (status === 401) return new AppError('invalid_key', { status })
+  if (status === 402 || (message && BALANCE_PATTERN.test(message))) return new AppError('no_balance', { status })
+  if (status === 400 || status === 422) {
+    const param = findRejectedParam(message)
+    if (param === 'mask') return new AppError('mask_unsupported', { status, detail: message, param })
+    if (param) return new AppError('param_rejected', { status, detail: message, param })
   }
-  return message ?? `Ошибка HTTP ${status}`
+  if (status === 404 || (status === 400 && message && MODEL_PATTERN.test(message))) {
+    return new AppError('model_unavailable', { status, detail: message })
+  }
+  return new AppError('http', { status, detail: message ?? `HTTP ${status}` })
 }
 
 function detectMime(bytes: Uint8Array): string {
@@ -129,13 +150,13 @@ async function urlToImage(url: string, signal: AbortSignal): Promise<GeneratedIm
 }
 
 async function requestImages(params: GenerateParams, n: number): Promise<GeneratedImage[]> {
-  const edit = !!params.images && params.images.length > 0
+  const edit = isEdit(params)
   const { body: requestBody, json } = buildBody(params, n)
   const headers: Record<string, string> = { Authorization: `Bearer ${params.apiKey}` }
   if (json) headers['Content-Type'] = 'application/json'
   let response: Response
   try {
-    response = await fetch(resolveEndpoint(params.baseUrl, edit), {
+    response = await fetch(resolveApiUrl(params.baseUrl, edit ? EDITS_PATH : GENERATIONS_PATH), {
       method: 'POST',
       headers,
       body: requestBody,
@@ -143,7 +164,7 @@ async function requestImages(params: GenerateParams, n: number): Promise<Generat
     })
   } catch (error) {
     if (params.signal.aborted) throw error
-    throw new ApiError('Нет соединения с API — проверьте URL и подключение к сети')
+    throw new AppError('network')
   }
 
   let body: ApiResponse | null = null
@@ -155,9 +176,9 @@ async function requestImages(params: GenerateParams, n: number): Promise<Generat
 
   if (!response.ok) {
     if (edit && (response.status === 404 || response.status === 405)) {
-      throw new ApiError('API не поддерживает доработку изображений (/images/edits)', response.status)
+      throw new AppError('edits_unsupported', { status: response.status })
     }
-    throw new ApiError(toUserMessage(response.status, extractMessage(body), params.model), response.status)
+    throw classify(response.status, extractMessage(body))
   }
 
   const items = body?.data ?? []
@@ -169,7 +190,10 @@ async function requestImages(params: GenerateParams, n: number): Promise<Generat
     }),
   )
   const result = images.filter((image): image is GeneratedImage => image !== null)
-  if (result.length === 0) throw new ApiError(extractMessage(body) ?? 'Сервер не вернул изображений')
+  if (result.length === 0) {
+    const message = extractMessage(body)
+    throw message ? new AppError('http', { detail: message }) : new AppError('empty')
+  }
   return result
 }
 
@@ -178,23 +202,27 @@ async function requestParallel(params: GenerateParams, count: number): Promise<G
   const images = settled.flatMap((r) => (r.status === 'fulfilled' ? r.value : []))
   if (images.length > 0) return images
   const failure = settled.find((r): r is PromiseRejectedResult => r.status === 'rejected')
-  throw failure?.reason ?? new ApiError('Сервер не вернул изображений')
+  throw failure?.reason ?? new AppError('empty')
 }
 
+/** Ошибка похожа на «параметр n не поддерживается», а не на мусорный prompt, размер или модерацию. */
 function isNotSupportedN(error: unknown): boolean {
-  if (!(error instanceof ApiError) || error.status === null) return false
-  return error.status === 400 || error.status === 422
+  if (!(error instanceof AppError)) return false
+  if (error.status !== 400 && error.status !== 422) return false
+  if (error.code !== 'http' && error.code !== 'model_unavailable') return false
+  if (!error.detail || error.detail.startsWith('HTTP ')) return error.code === 'http'
+  return COUNT_PATTERN.test(error.detail)
 }
 
 const singleImageModels = new Set<string>()
 
 function modelKey(params: GenerateParams): string {
-  return `${params.images?.length ? 'edit' : 'gen'}:${params.model}`
+  return `${isEdit(params) ? 'edit' : 'gen'}:${params.model}`
 }
 
 export async function generateImages(params: GenerateParams): Promise<GeneratedImage[]> {
   if (params.count <= 1) return requestImages(params, 1)
-  if (singleImageModels.has(modelKey(params))) return requestParallel(params, params.count)
+  if (params.singleOnly || singleImageModels.has(modelKey(params))) return requestParallel(params, params.count)
 
   let images: GeneratedImage[]
   try {

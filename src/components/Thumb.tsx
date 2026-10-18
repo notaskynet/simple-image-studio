@@ -1,15 +1,16 @@
-import { useImageUrl } from '../hooks/useImageUrl'
-import type { GenerationMeta } from '../types'
+import { useImageUrl } from '@/hooks/useImageUrl'
+import { cn } from '@/lib/utils'
 
 interface ThumbProps {
-  meta: GenerationMeta
+  imageId?: string
+  remoteUrl?: string
   className?: string
 }
 
-export function Thumb({ meta, className = '' }: ThumbProps) {
-  const url = useImageUrl(meta, true)
+export function Thumb({ imageId, remoteUrl, className }: ThumbProps) {
+  const url = useImageUrl(imageId, remoteUrl)
   return (
-    <span className={`block overflow-hidden bg-zinc-200 dark:bg-zinc-800 ${className}`}>
+    <span className={cn('block overflow-hidden bg-muted', className)}>
       {url && <img src={url} alt="" className="size-full object-cover" draggable={false} />}
     </span>
   )

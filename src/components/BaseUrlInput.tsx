@@ -1,4 +1,6 @@
-import { inputBase } from './ui'
+import { Input } from '@/components/ui/input'
+import { useT } from '@/i18n'
+import { cn } from '@/lib/utils'
 
 interface BaseUrlInputProps {
   id: string
@@ -9,11 +11,12 @@ interface BaseUrlInputProps {
 }
 
 export function BaseUrlInput({ id, value, onChange, invalid, autoFocus }: BaseUrlInputProps) {
+  const t = useT()
   const hintId = `${id}-hint`
 
   return (
     <>
-      <input
+      <Input
         id={id}
         type="url"
         inputMode="url"
@@ -22,16 +25,13 @@ export function BaseUrlInput({ id, value, onChange, invalid, autoFocus }: BaseUr
         placeholder="https://api.example.com/v1"
         autoComplete="url"
         spellCheck={false}
-        data-autofocus={autoFocus ? true : undefined}
         autoFocus={autoFocus}
         aria-invalid={invalid}
         aria-describedby={hintId}
-        className={`${inputBase} font-mono ${invalid ? 'border-rose-500! focus:ring-rose-500/15!' : ''}`}
+        className="font-mono"
       />
-      <p id={hintId} className={`text-xs ${invalid ? 'text-rose-600 dark:text-rose-400' : 'text-zinc-500 dark:text-zinc-400'}`}>
-        {invalid
-          ? 'Введите корректный адрес, начинающийся с https:// или http://'
-          : 'Базовый адрес OpenAI-совместимого API. К нему добавится /images/generations.'}
+      <p id={hintId} className={cn('text-xs', invalid ? 'text-destructive' : 'text-muted-foreground')}>
+        {invalid ? t('field.baseUrl.invalid') : t('field.baseUrl.hint')}
       </p>
     </>
   )

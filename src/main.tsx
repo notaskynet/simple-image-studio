@@ -2,7 +2,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 
 import App from './App'
-import { ToastProvider } from './components/Toasts'
+import { I18nProvider } from './i18n'
 import './index.css'
 
 const root = document.getElementById('root')
@@ -10,8 +10,8 @@ if (!root) throw new Error('Root element not found')
 
 createRoot(root).render(
   <StrictMode>
-    <ToastProvider>
+    <I18nProvider>
       <App />
-    </ToastProvider>
+    </I18nProvider>
   </StrictMode>,
 )

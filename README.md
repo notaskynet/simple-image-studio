@@ -1,39 +1,30 @@
-# Simple Image Studio
+# Image Studio
 
-Одностраничное веб-приложение для генерации изображений по текстовому описанию через любой OpenAI-совместимый API
-(эндпоинт `/images/generations`).
+Web studio for generating and editing images through any OpenAI-compatible API
+(`/images/generations`, `/images/edits`). UI in English and Russian.
 
-## Возможности
+The prompt goes to the API as written: no LLM in between, no edit history stitched into the text.
+An edit sends one image (the selected version) plus a short instruction.
 
-- **Агент** — диалог с чат-моделью: она уточняет идею, сама пишет подробный промпт и вызывает инструменты
-  `generate_image` и `edit_image`. Ответы приходят потоком, несколько вариантов создаются параллельно.
-- **Системный промпт** агента и чат-модель настраиваются в настройках (есть сброс к стандартному).
-- **Режим «Напрямую»** — текст сразу уходит в генерацию, к правкам автоматически прикладываются текущая
-  версия изображения и история предыдущих правок.
-- Генерации идут параллельно: можно отправлять новые сообщения, не дожидаясь завершения предыдущих.
-- Версии v1 → v2 → v3 с полосой миниатюр, ветвление от любой версии, сравнение «до / после» ползунком.
-- Прикрепление своих фото (кнопка, вставка из буфера, перетаскивание).
-- **Боковая панель** — история сессий по датам с поиском (можно продолжить любую) и галерея всех изображений.
-- Скачивание, копирование изображения и промпта, полноэкранный просмотр со свайпом.
-- Тёмная и светлая темы, адаптивная вёрстка.
+## Features
 
-Используемые эндпоинты:
+- Mask brush: native PNG mask for models that support it, red markup on the image for the rest
+- Version tree: edit from any version, compare with parent, re-run with another model or quality
+- Request inspector: see exactly what was sent for each version
+- Per-model capability profiles (`size`, `quality`, `n`, transparent background, negative prompt, mask); rejected parameters are disabled automatically
+- Reference images with roles (style / object / character)
+- Zoom and pan, projects, upload your own photo, light and dark themes
 
-- `POST /chat/completions` — агент (нужна модель с поддержкой function calling);
-- `POST /images/generations` — новые изображения;
-- `POST /images/edits` — правки (multipart с изображениями).
-
-## URL API и ключ
-
-При первом запуске укажите базовый URL API (например, `https://api.example.com/v1`) и API-ключ.
-Они вводятся в приложении и хранятся **только в localStorage вашего браузера**. В репозитории и коде их нет.
-Удалить ключ из браузера можно в настройках кнопкой «Забыть ключ».
-
-> ⚠️ Никогда не публикуйте свой API-ключ: не коммитьте его в репозиторий, не вставляйте в issues, скриншоты и чаты.
-
-## Локальный запуск
+## Setup
 
 ```bash
 npm install
 npm run dev
 ```
+
+On first launch enter your API base URL (e.g. `https://api.example.com/v1`) and key.
+Both are stored only in your browser's localStorage. Never commit or share your key.
+
+## Stack
+
+React 19, Vite, Tailwind CSS v4, shadcn/ui, idb-keyval.

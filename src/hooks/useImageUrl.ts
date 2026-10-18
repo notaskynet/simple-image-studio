@@ -1,25 +1,29 @@
 import { useEffect, useState } from 'react'
 
 import { getImageUrl, peekImageUrl } from '../lib/db'
-import type { GenerationMeta } from '../types'
 
-export function useImageUrl(meta: GenerationMeta, enabled: boolean): string | null {
-  const [url, setUrl] = useState<string | null>(() => peekImageUrl(meta))
+export function useImageUrl(imageId: string | undefined, remoteUrl?: string): string | null {
+  const [state, setState] = useState<{ key: string; url: string | null }>(() => ({
+    key: `${imageId}|${remoteUrl}`,
+    url: peekImageUrl(imageId),
+  }))
+  const key = `${imageId}|${remoteUrl}`
 
   useEffect(() => {
-    if (!enabled || url) return
+    if (!imageId && !remoteUrl) return
     let active = true
-    getImageUrl(meta)
-      .then((value) => {
-        if (active) setUrl(value)
+    getImageUrl(imageId, remoteUrl)
+      .then((url) => {
+        if (active) setState({ key, url })
       })
       .catch(() => {
-        if (active) setUrl(null)
+        if (active) setState({ key, url: null })
       })
     return () => {
       active = false
     }
-  }, [meta, enabled, url])
+  }, [imageId, remoteUrl, key])
 
-  return url
+  if (state.key === key) return state.url ?? peekImageUrl(imageId)
+  return peekImageUrl(imageId)
 }
